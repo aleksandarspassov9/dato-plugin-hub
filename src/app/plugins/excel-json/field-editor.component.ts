@@ -2,6 +2,7 @@ import { Component, Input, ChangeDetectionStrategy, NgZone } from '@angular/core
 import type { RenderFieldExtensionCtx } from 'datocms-plugin-sdk';
 import { ImportService } from './import.service';
 import * as XLSX from 'xlsx';
+import { CommonModule } from '@angular/common';
 
 type FieldParams = {
   sourceFileApiKey?: string;
@@ -18,7 +19,7 @@ const LAST_SIG_BY_BLOCK = new Map<string, string>();
 @Component({
   selector: 'dato-excel-editor',
   standalone: true,
-  imports: [],
+  imports: [CommonModule],
   template: `
     <div class="wrap">
       <div *ngIf="busy" class="spinner">Loading…</div>
