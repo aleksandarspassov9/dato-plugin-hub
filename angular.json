@@ -19,19 +19,41 @@
           "options": {
             "outputPath": "dist/dato-plugin-hub",
             "index": "src/index.html",
-            "browser": "src/main.ts",           
+            "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
             "polyfills": ["zone.js"],
             "assets": ["src/favicon.ico", "src/assets"],
             "styles": ["src/styles.scss"],
             "scripts": []
-          }
+          },
+          "configurations": {
+            "production": {
+              "optimization": true,
+              "extractLicenses": true,
+              "sourceMap": false
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
         },
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
           "options": {
-            "buildTarget": "dato-plugin-hub:build"
-          }
+            "buildTarget": "dato-plugin-hub:build:development"
+          },
+          "configurations": {
+            "production": {
+              "buildTarget": "dato-plugin-hub:build:production"
+            },
+            "development": {
+              "buildTarget": "dato-plugin-hub:build:development"
+            }
+          },
+          "defaultConfiguration": "development"
         },
         "extract-i18n": {
           "builder": "@angular/build:extract-i18n"
