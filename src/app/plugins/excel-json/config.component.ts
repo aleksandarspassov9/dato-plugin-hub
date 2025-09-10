@@ -18,7 +18,7 @@ import { CommonModule } from '@angular/common';
       />
 
       <div style="display:flex; gap:8px; margin-top:8px;">
-        <button (click)="save()" [disabled]="saving">
+        <button class="primary"  (click)="save()" [disabled]="saving">
           {{ saving ? 'Saving…' : 'Save configuration' }}
         </button>
         <span *ngIf="message" style="opacity:.8">{{ message }}</span>

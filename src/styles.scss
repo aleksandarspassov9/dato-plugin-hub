@@ -1,6 +1,68 @@
-:root {
-  --border-color: #dcdcdc;
+/* Inherit Dato’s font and base colors */
+:host, :root, body {
+  font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji");
+  font-size: var(--font-size-base, 14px);
+  color: var(--text-color, #2b2b2b);
+  line-height: 1.5;
 }
 
-* { box-sizing: border-box; }
-html, body, app-root { height: 100%; margin: 0; }
+h1, h2, h3, h4, h5, h6, p {
+  margin: 0 0 0.5em;
+  font-weight: 500;
+}
+
+/* Ensure inputs and buttons inherit font */
+button, input, textarea, select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #dcdcdc);
+  background: var(--bg-base, #fff);
+  color: var(--text-color, #2b2b2b);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: var(--bg-base-hover, #f5f5f5);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+button.primary {
+  background: var(--accent-color, #0b5fff);
+  border-color: var(--accent-color, #0b5fff);
+  color: #fff;
+
+  &:hover {
+    background: var(--accent-color-hover, #0046cc);
+    border-color: var(--accent-color-hover, #0046cc);
+  }
+}
+
+input[type="text"], input[type="password"], input[type="number"], textarea, select {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color, #dcdcdc);
+  border-radius: 6px;
+  background: var(--bg-base, #fff);
+  font-size: inherit;
+  width: 100%;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent-color, #0b5fff);
+    box-shadow: 0 0 0 2px rgba(11, 95, 255, 0.2);
+  }
+}
