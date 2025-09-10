@@ -15,6 +15,8 @@ const PAYLOAD_SHAPE: 'matrix' | 'rows' = 'matrix';
 
 // global: last processed signature per block path+locale
 const LAST_SIG_BY_BLOCK = new Map<string, string>();
+// Tracks whether we've taken the initial snapshot for a block
+const FIRST_SCAN_DONE = new Map<string, boolean>();
 
 @Component({
   selector: 'dato-excel-editor',
@@ -52,6 +54,7 @@ export class FieldEditorComponent {
     const params = this.getParams(this.ctx);
     this.sourceApiKey = params.sourceFileApiKey || DEFAULT_SOURCE_FILE_API_KEY;
 
+    // Poll for changes only; first tick establishes a baseline (no import)
     this.zone.runOutsideAngular(() => {
       this.pollId = window.setInterval(() => this.tick(), 800);
     });
@@ -86,18 +89,62 @@ export class FieldEditorComponent {
   private async tick() {
     try {
       const fileVal = this.svc.getSiblingFileFromBlock(this.ctx, this.sourceApiKey);
-      const sig = this.fileSignature(fileVal);
-      const bkey = this.blockKey();
-      if (!sig || !bkey) return;
+      const sig = this.fileSignature(fileVal);        // string | null
+      const bkey = this.blockKey();                   // block+locale key
+      if (!bkey) return;
 
-      if (LAST_SIG_BY_BLOCK.get(bkey) === sig) return;
-      if (this.lastLocalSig === sig || this.busy) return;
+      const firstDone = FIRST_SCAN_DONE.get(bkey) === true;
+      const prevSig  = LAST_SIG_BY_BLOCK.get(bkey) ?? null;
 
-      LAST_SIG_BY_BLOCK.set(bkey, sig);
-      this.lastLocalSig = sig;
+      // 1) First scan: just record the baseline, never import
+      if (!firstDone) {
+        LAST_SIG_BY_BLOCK.set(bkey, sig ?? '__NULL__');
+        FIRST_SCAN_DONE.set(bkey, true);
+        this.lastLocalSig = sig ?? null;
+        return;
+      }
 
+      // 2) No change since last tick
+      const normalizedSig = sig ?? '__NULL__';
+      if (normalizedSig === (prevSig ?? '__NULL__') || this.busy) return;
+
+      // 3) Change detected
+      LAST_SIG_BY_BLOCK.set(bkey, normalizedSig);
+      this.lastLocalSig = sig ?? null;
+
+      // 3a) File removed → optional clear
+      if (sig == null) {
+        await this.handleRemoval(bkey);
+        return;
+      }
+
+      // 3b) File added/changed → import
       await this.importFromFile(fileVal, bkey);
-    } catch {}
+    } catch {
+      // swallow polling errors
+    }
+  }
+
+  // Clear the JSON (and optional sibling metas) when file is removed
+  private async handleRemoval(bkey: string) {
+    // Toggle this to false if you do NOT want to auto-clear on removal
+    const CLEAR_ON_REMOVE = true;
+
+    if (!CLEAR_ON_REMOVE) return;
+
+    this.zone.run(() => { this.busy = true; this.notice = null; });
+    try {
+      await this.ctx.setFieldValue(this.ctx.fieldPath, null);
+      await Promise.resolve();
+      await this.ctx.setFieldValue(this.ctx.fieldPath, JSON.stringify({
+        columns: [],
+        data: [],
+        meta: { filename: null, mime: null, imported_at: new Date().toISOString(), removed: true }
+      }));
+      this.ctx.notice?.('File removed: cleared imported data.');
+    } finally {
+      this.zone.run(() => { this.busy = false; });
+    }
   }
 
   private async importFromFile(fileVal: any, bkey: string) {
