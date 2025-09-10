@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
+import { AfterViewInit, Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 @Component({
@@ -31,7 +31,7 @@ import { CommonModule } from '@angular/common';
     button { padding:8px 12px; border-radius:6px; border:1px solid #dcdcdc; background:#0b5fff; color:#fff; }
   `]
 })
-export class ConfigComponent implements OnChanges {
+export class ConfigComponent implements OnChanges, AfterViewInit {
   private _ctx: any;
   @Input() set ctx(v: any) {
     this._ctx = v;
@@ -40,6 +40,10 @@ export class ConfigComponent implements OnChanges {
     this.token = params?.cmaToken || '';
   }
   get ctx() { return this._ctx; }
+
+  ngAfterViewInit() {
+    this.ctx.updateHeight(220);
+  }
 
   token = '';
   saving = false;
