@@ -2,6 +2,11 @@
   "name": "dato-plugin-hub",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": "20.x",
+    "npm": ">=10.5"
+  },
+  "packageManager": "npm@10.9.0",
   "scripts": {
     "start": "ng serve",
     "build": "ng build --configuration production",
