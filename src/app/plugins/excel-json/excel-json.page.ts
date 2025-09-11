@@ -6,6 +6,7 @@ import { ConfigComponent } from './config.component';
 
 @Component({
   selector: 'app-excel-json-page',
+  standalone: true,
   template: `<div id="root" style="height:100%"></div>`,
   styles: [':host{display:block;height:100%}'],
 })

@@ -2,11 +2,11 @@
 /* To learn more about Angular compiler options: https://angular.dev/reference/configs/angular-compiler-options. */
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": {
+   "compilerOptions": {
     "outDir": "./out-tsc/app",
-    "types": []
+    "skipLibCheck": true,
+    "types": ["react"]   // optional: to satisfy datocms-plugin-sdk type refs
   },
-  "include": ["src/**/*.ts", "src/react-shim.d.ts"],
-  "exclude": ["src/test.ts", "src/**/*.spec.ts"]
+  "include": ["src/**/*.ts", "src/react-shim.d.ts"]
 }
 
