@@ -10,8 +10,8 @@ import { FieldEditorComponent } from './field-editor.component';
   imports: [
     CommonModule,
     RouterModule.forChild([{ path: '', component: ExcelJsonPageComponent }]),
-    ConfigComponent,        // standalone
-    FieldEditorComponent,   // standalone
+    ConfigComponent,
+    FieldEditorComponent,
   ],
 })
 export class ExcelJsonModule {}

@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, Input, OnChanges, SimpleChanges } from '@angular/core';
+import { AfterViewInit, Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 @Component({
@@ -31,14 +31,15 @@ import { CommonModule } from '@angular/common';
     button { padding:8px 12px; border-radius:6px; border:1px solid #dcdcdc; background:#0b5fff; color:#fff; }
   `]
 })
-export class ConfigComponent implements OnChanges, AfterViewInit {
+export class ConfigComponent implements AfterViewInit {
   private _ctx: any;
+
   @Input() set ctx(v: any) {
     this._ctx = v;
-    // initialize as soon as ctx arrives (it may be set after ngOnInit)
     const params = v?.plugin?.attributes?.parameters as any;
     this.token = params?.cmaToken || '';
   }
+  
   get ctx() { return this._ctx; }
 
   ngAfterViewInit() {
@@ -48,10 +49,6 @@ export class ConfigComponent implements OnChanges, AfterViewInit {
   token = '';
   saving = false;
   message = '';
-
-  ngOnChanges(_c: SimpleChanges) {
-    // no-op; the setter above handles initialization
-  }
 
   async save() {
     if (!this.ctx) { this.message = 'Context not ready'; return; }
