@@ -60,11 +60,14 @@ export class ChartPreviewComponent implements OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (!this.ctx) return;
 
-    const chartPreviewData = this.ctx.formValues?.components.map(c => {
-      if (Object.hasOwn(c, 'chart_preview')) {
-        return c
-      }
-    })
+    // const chartPreviewData = this.ctx.formValues?.components.map(c => {
+    //   if (Object.hasOwn(c, 'chart_preview')) {
+    //     return c
+    //   }
+    // })
+
+    const chartPreviewDataIndex = this.ctx.formValues?.components.findIndex(c => Object.hasOwn(c, 'chart_preview'))
+    const chartPreviewData = this.ctx.formValues?.components[chartPreviewDataIndex]
     console.log(console.log(chartPreviewData))
 
     // Allow plugin param override for block api key
