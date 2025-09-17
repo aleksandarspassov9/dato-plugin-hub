@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
-import { ChartPreviewComponent } from './chart-preview.component';
+import { ChartPreviewPageComponent } from './chart-preview-page.component';
 
 export const routes: Routes = [
-  { path: '', component: ChartPreviewComponent }
+  { path: '', component: ChartPreviewPageComponent }
 ];
