@@ -60,6 +60,8 @@ export class ChartPreviewComponent implements OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (!this.ctx) return;
 
+    console.log(this.ctx)
+
     // Allow plugin param override for block api key
     const params = this.ctx?.plugin?.attributes?.parameters ?? {};
     this.apiKey = params?.blockApiKey || 'chart';
