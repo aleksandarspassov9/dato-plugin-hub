@@ -56,33 +56,10 @@ export class ChartComponent implements OnChanges {
     this.chartJsType = chartJsTypeFrom(this.chartType);
 
     const { chartData, palette } = buildChartData(attrs, this.chartType);
-    console.log(chartData),
-    console.log(palette),
-    this.chartData = {
-    labels: ['Q1', 'Q2', 'Q3', 'Q4'],
-    datasets: [
-      {
-        label: 'Sales',
-        data: [120, 90, 150, 80],
-        backgroundColor: ['rgba(99,132,255,0.5)','rgba(255,159,64,0.5)','rgba(75,192,192,0.5)','rgba(255,99,132,0.5)'],
-        borderColor: ['rgb(99,132,255)','rgb(255,159,64)','rgb(75,192,192)','rgb(255,99,132)'],
-        borderWidth: 1,
-      },
-    ],
-  };
+    this.chartData = chartData;
 
     const aspectRatio = Number(attrs.aspect_ratio) || 2;
-    this.options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { position: 'top' },
-      tooltip: { enabled: true },
-    },
-    scales: {
-      y: { beginAtZero: true, ticks: { precision: 0 } },
-    },
-  };;
+    this.options = buildChartOptions(this.chartType, aspectRatio, palette);
     console.log(this.chartData)
 
     this.cd.markForCheck();
