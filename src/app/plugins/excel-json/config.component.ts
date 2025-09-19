@@ -2,10 +2,10 @@ import { AfterViewInit, Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 @Component({
-  selector: 'dato-excel-config',
-  standalone: true,
-  imports: [CommonModule],
-  template: `
+    selector: 'dato-excel-config',
+    standalone: true,
+    imports: [CommonModule],
+    template: `
     <div class="wrap">
       <h3>Config</h3>
 
@@ -25,7 +25,7 @@ import { CommonModule } from '@angular/common';
       </div>
     </div>
   `,
-  styles: [`
+    styles: [`
     .wrap { display:flex; flex-direction:column; gap:8px; font:inherit; padding:16px; }
     input { padding:8px; border:1px solid #dcdcdc; border-radius:6px; }
     button { padding:8px 12px; border-radius:6px; border:1px solid #dcdcdc; background:#0b5fff; color:#fff; }
@@ -39,7 +39,7 @@ export class ConfigComponent implements AfterViewInit {
     const params = v?.plugin?.attributes?.parameters as any;
     this.token = params?.cmaToken || '';
   }
-  
+
   get ctx() { return this._ctx; }
 
   ngAfterViewInit() {

@@ -30,10 +30,10 @@ function pickChartBlock(value: any, blockApiKey = 'chart') {
 }
 
 @Component({
-  selector: 'dato-chart-preview',
-  standalone: true,
-  imports: [CommonModule],
-  template: `
+    selector: 'dato-chart-preview',
+    standalone: true,
+    imports: [CommonModule],
+    template: `
     <div style="padding:16px; font:inherit;">
       <h3 style="margin:0 0 8px;">Chart block preview</h3>
 
@@ -48,7 +48,7 @@ function pickChartBlock(value: any, blockApiKey = 'chart') {
         <em style="opacity:.8">Waiting for DatoCMS context or no <code>{{ apiKey }}</code> block found in this field…</em>
       </ng-template>
     </div>
-  `,
+  `
 })
 export class ChartPreviewComponent implements OnChanges {
   /** Dato render context, passed in from the page component */

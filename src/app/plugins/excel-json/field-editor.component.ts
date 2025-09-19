@@ -19,10 +19,10 @@ const LAST_SIG_BY_BLOCK = new Map<string, string>();
 const FIRST_SCAN_DONE = new Map<string, boolean>();
 
 @Component({
-  selector: 'dato-excel-editor',
-  standalone: true,
-  imports: [CommonModule],
-  template: `
+    selector: 'dato-excel-editor',
+    standalone: true,
+    imports: [CommonModule],
+    template: `
     <div class="wrap">
       <div *ngIf="busy" class="spinner">Loading…</div>
       <div *ngIf="notice" class="alert">{{ notice }}</div>
@@ -31,12 +31,12 @@ const FIRST_SCAN_DONE = new Map<string, boolean>();
       </div>
     </div>
   `,
-  styles: [`
+    styles: [`
     .wrap { font: inherit; }
     .alert { padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; margin-top:8px; }
     .hint { opacity:.7; font-size:12px; margin-top:4px; }
   `],
-  changeDetection: ChangeDetectionStrategy.OnPush,
+    changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class FieldEditorComponent {
   @Input() ctx!: RenderFieldExtensionCtx;
