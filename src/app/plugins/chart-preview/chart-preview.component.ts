@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ButtonModule } from 'primeng/button';
 import { ChartComponent } from './chart/chart.component';
@@ -17,52 +17,28 @@ import { ChartComponent } from './chart/chart.component';
     </div>
     `
 })
-export class ChartPreviewComponent implements OnChanges, OnDestroy {
+export class ChartPreviewComponent implements OnChanges {
   @Input() ctx: any;
 
-  chartData: any | undefined; // undefined until ready
-  private debounceTimer?: ReturnType<typeof setTimeout>;
+  chartData: any = null;
 
-  ngOnChanges(_: SimpleChanges): void {
-    // cancel any pending run
-    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+  ngOnChanges(changes: SimpleChanges): void {
+    console.log(changes)
+    if (!this.ctx) return;
 
-    // schedule after idle
-    this.debounceTimer = setTimeout(() => this.applyChangesSafe(), 300);
-  }
+    const chartPreviewDataIndex = this.ctx.formValues?.components.findIndex(c => Object.hasOwn(c, 'chart_preview'))
+    const chartPreviewData = this.ctx.formValues?.components[chartPreviewDataIndex]
 
-  ngOnDestroy(): void {
-    if (this.debounceTimer) clearTimeout(this.debounceTimer);
-  }
-
-  private applyChangesSafe(): void {
-    // Validate ctx & components
-    const components = this.ctx?.formValues?.components;
-    if (!Array.isArray(components)) {
-      this.chartData = undefined;
-      return;
-    }
-
-    const item = components.find((c: any) =>
-      c && Object.prototype.hasOwnProperty.call(c, 'chart_preview')
-    );
-    if (!item) {
-      this.chartData = undefined;
-      return;
-    }
-
-    // Build chart data defensively
-    const { title, chart_type, labels, data, aspect_ratio } = item;
     this.chartData = {
       attributes: {
-        title: title ?? '',
-        chart_type: chart_type ?? 'bar',
-        labels: labels ?? [],
-        data: data ?? [],
-        aspect_ratio: Number(aspect_ratio) || 2,
+        title: chartPreviewData.title,
+        chart_type: chartPreviewData.chart_type,
+        labels: chartPreviewData.labels,
+        data: chartPreviewData.data,
+        aspect_ratio: chartPreviewData.aspect_ratio
       }
-    };
+    }
 
-    this.ctx?.startAutoResizer?.();
+    this.ctx.startAutoResizer?.();
   }
 }
