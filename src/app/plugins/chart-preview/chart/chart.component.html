@@ -1,8 +1,5 @@
-<div class="flex flex-col relative max-w-7xl mx-auto w-full px-6 py-12 z-10 bg-[#001925]">
-  @if (title) {
-    <h1 class="text-3xl mb-10">{{title}}</h1>
-  }
+<div style="background-color: #002A3E; border-radius: 0.5rem;">
   @if (chartType) {
-    <p-chart [type]="chartJsType" [data]="chartData" [options]="options" class="h-[30rem]" style="display:block; height:320px" />
+    <p-chart [type]="chartJsType" [data]="chartData" [options]="options" styleClass="display:block; height:320px" />
   }
 </div>
