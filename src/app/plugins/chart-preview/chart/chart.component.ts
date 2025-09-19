@@ -42,9 +42,15 @@ export class ChartComponent implements OnChanges {
   chartData: any;
   options: any;
 
+  private debounceTimer: any;
+
   ngOnChanges(_: SimpleChanges): void {
-    this.recompute();
+    clearTimeout(this.debounceTimer);
+    this.debounceTimer = setTimeout(() => {
+      this.recompute();
+    }, 300);
   }
+
 
   private recompute(): void {
     if (!this._data?.attributes) return;

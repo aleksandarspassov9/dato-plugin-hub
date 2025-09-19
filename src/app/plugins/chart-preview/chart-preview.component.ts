@@ -47,8 +47,6 @@ export class ChartPreviewComponent implements OnChanges {
       }
     }
 
-    console.log(this.chartData.attributes.data)
-
     // Allow plugin param override for block api key
     const params = this.ctx?.plugin?.attributes?.parameters ?? {};
     this.apiKey = params?.blockApiKey || 'chart';
