@@ -1,5 +1,5 @@
 <div style="background-color: #002A3E; border-radius: 0.5rem;">
-  @if (chartType) {
+  @if (chartType && chartData.datasets.length > 0) {
     <p-chart [type]="chartJsType" [data]="chartData" [options]="options" styleClass="display:block; height:320px" />
   }
 </div>
