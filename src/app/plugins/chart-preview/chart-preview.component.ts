@@ -22,31 +22,22 @@ export class ChartPreviewComponent implements OnChanges {
 
   chartData: any = null;
 
-  private debounceTimer: any;
-
   ngOnChanges(changes: SimpleChanges): void {
     if (!this.ctx) return;
 
-    clearTimeout(this.debounceTimer);
+    const chartPreviewDataIndex = this.ctx.formValues?.components.findIndex(c => Object.hasOwn(c, 'chart_preview'))
+    const chartPreviewData = this.ctx.formValues?.components[chartPreviewDataIndex]
 
-    this.debounceTimer = setTimeout(() => {
-      const chartPreviewDataIndex = this.ctx.formValues?.components.findIndex(
-        c => Object.hasOwn(c, 'chart_preview')
-      );
-      const chartPreviewData = this.ctx.formValues?.components[chartPreviewDataIndex];
+    this.chartData = {
+      attributes: {
+        title: chartPreviewData.title,
+        chart_type: chartPreviewData.chart_type,
+        labels: chartPreviewData.labels,
+        data: chartPreviewData.data,
+        aspect_ratio: chartPreviewData.aspect_ratio
+      }
+    }
 
-      this.chartData = {
-        attributes: {
-          title: chartPreviewData.title,
-          chart_type: chartPreviewData.chart_type,
-          labels: chartPreviewData.labels,
-          data: chartPreviewData.data,
-          aspect_ratio: chartPreviewData.aspect_ratio,
-        },
-      };
-
-      this.ctx.startAutoResizer?.();
-    }, 300);
+    this.ctx.startAutoResizer?.();
   }
-
 }
