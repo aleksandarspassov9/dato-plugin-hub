@@ -36,19 +36,18 @@ function pickChartBlock(value: any, blockApiKey = 'chart') {
     template: `
     <div style="padding:16px; font:inherit;">
       <h3 style="margin:0 0 8px;">Chart block preview</h3>
-
-      <ng-container *ngIf="chartBlock; else waiting">
+    
+      @if (chartBlock) {
         <p style="opacity:.8; margin:0 0 8px;">Received <code>{{ apiKey }}</code> block:</p>
         <pre style="padding:12px; background:#f6f6f6; border-radius:8px; overflow:auto;">
-{{ chartBlock | json }}
+          {{ chartBlock | json }}
         </pre>
-      </ng-container>
-
-      <ng-template #waiting>
+      } @else {
         <em style="opacity:.8">Waiting for DatoCMS context or no <code>{{ apiKey }}</code> block found in this field…</em>
-      </ng-template>
+      }
+    
     </div>
-  `
+    `
 })
 export class ChartPreviewComponent implements OnChanges {
   /** Dato render context, passed in from the page component */

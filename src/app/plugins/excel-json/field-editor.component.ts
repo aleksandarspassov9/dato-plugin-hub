@@ -2,7 +2,7 @@ import { Component, Input, ChangeDetectionStrategy, NgZone } from '@angular/core
 import type { RenderFieldExtensionCtx } from 'datocms-plugin-sdk';
 import { ImportService } from './import.service';
 import * as XLSX from 'xlsx';
-import { CommonModule } from '@angular/common';
+
 
 type FieldParams = {
   sourceFileApiKey?: string;
@@ -21,16 +21,22 @@ const FIRST_SCAN_DONE = new Map<string, boolean>();
 @Component({
     selector: 'dato-excel-editor',
     standalone: true,
-    imports: [CommonModule],
+    imports: [],
     template: `
     <div class="wrap">
-      <div *ngIf="busy" class="spinner">Loading…</div>
-      <div *ngIf="notice" class="alert">{{ notice }}</div>
-      <div *ngIf="!busy && !notice" class="hint">
-        Upload/replace the file in this block’s <code>{{sourceApiKey}}</code> field — import runs automatically.
-      </div>
+      @if (busy) {
+        <div class="spinner">Loading…</div>
+      }
+      @if (notice) {
+        <div class="alert">{{ notice }}</div>
+      }
+      @if (!busy && !notice) {
+        <div class="hint">
+          Upload/replace the file in this block’s <code>{{sourceApiKey}}</code> field — import runs automatically.
+        </div>
+      }
     </div>
-  `,
+    `,
     styles: [`
     .wrap { font: inherit; }
     .alert { padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; margin-top:8px; }
