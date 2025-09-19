@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ButtonModule } from 'primeng/button';
 import { ChartComponent } from './chart/chart.component';
@@ -17,40 +17,52 @@ import { ChartComponent } from './chart/chart.component';
     </div>
     `
 })
-export class ChartPreviewComponent implements OnChanges {
+export class ChartPreviewComponent implements OnChanges, OnDestroy {
   @Input() ctx: any;
 
-  chartData: any = null;
+  chartData: any | undefined; // undefined until ready
+  private debounceTimer?: ReturnType<typeof setTimeout>;
 
-  /** holds the timeout ID so we can cancel the previous call */
-  private debounceTimer: any;
-
-  ngOnChanges(changes: SimpleChanges): void {
+  ngOnChanges(_: SimpleChanges): void {
     // cancel any pending run
-    clearTimeout(this.debounceTimer);
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
 
-    // schedule the update after 300 ms of no further changes
-    this.debounceTimer = setTimeout(() => {
-      if (!this.ctx) return;
+    // schedule after idle
+    this.debounceTimer = setTimeout(() => this.applyChangesSafe(), 300);
+  }
 
-      const chartPreviewDataIndex = this.ctx.formValues?.components.findIndex(
-        c => Object.hasOwn(c, 'chart_preview')
-      );
-      const chartPreviewData =
-        this.ctx.formValues?.components[chartPreviewDataIndex];
+  ngOnDestroy(): void {
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+  }
 
-      this.chartData = {
-        attributes: {
-          title: chartPreviewData.title,
-          chart_type: chartPreviewData.chart_type,
-          labels: chartPreviewData.labels,
-          data: chartPreviewData.data,
-          aspect_ratio: chartPreviewData.aspect_ratio,
-        },
-      };
+  private applyChangesSafe(): void {
+    // Validate ctx & components
+    const components = this.ctx?.formValues?.components;
+    if (!Array.isArray(components)) {
+      this.chartData = undefined;
+      return;
+    }
 
-      // adjust the container height if needed
-      this.ctx.startAutoResizer?.();
-    }, 300); // ← adjust delay to taste
+    const item = components.find((c: any) =>
+      c && Object.prototype.hasOwnProperty.call(c, 'chart_preview')
+    );
+    if (!item) {
+      this.chartData = undefined;
+      return;
+    }
+
+    // Build chart data defensively
+    const { title, chart_type, labels, data, aspect_ratio } = item;
+    this.chartData = {
+      attributes: {
+        title: title ?? '',
+        chart_type: chart_type ?? 'bar',
+        labels: labels ?? [],
+        data: data ?? [],
+        aspect_ratio: Number(aspect_ratio) || 2,
+      }
+    };
+
+    this.ctx?.startAutoResizer?.();
   }
 }
