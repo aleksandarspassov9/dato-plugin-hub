@@ -10,41 +10,17 @@ function deepGet(obj: any, path: string | string[]) {
   return parts.reduce((acc, key) => (acc == null ? acc : acc[key]), obj);
 }
 
-function pickChartBlock(value: any, blockApiKey = 'chart') {
-  if (!value) return null;
-
-  // Single block field?
-  if (!Array.isArray(value)) {
-    const typeKey =
-      value?.itemType?.api_key || value?.blockType?.api_key || value?.type || value?.__typename;
-    return typeKey === blockApiKey ? value : null;
-  }
-
-  // Modular content: find first block with api_key = 'chart'
-  return (
-    value.find(
-      (b: any) =>
-        b?.itemType?.api_key === blockApiKey ||
-        b?.blockType?.api_key === blockApiKey ||
-        b?.type === blockApiKey
-    ) || null
-  );
-}
-
 @Component({
     selector: 'dato-chart-preview',
     standalone: true,
     imports: [CommonModule, ButtonModule, ChartComponent],
     template: `
     <div style="padding:16px; font:inherit;">
-      <gfp-chart-component [data]="chartData"></gfp-chart-component>
+
       <h3 style="margin:0 0 8px;">Chart block preview</h3>
 
-      @if (chartBlock) {
-        <p style="opacity:.8; margin:0 0 8px;">Received <code>{{ apiKey }}</code> block:</p>
-        <pre style="padding:12px; background:#f6f6f6; border-radius:8px; overflow:auto;">
-          {{ chartBlock | json }}
-        </pre>
+      @if (chartData) {
+        <gfp-chart-component [data]="chartData"></gfp-chart-component>
       } @else {
         <em style="opacity:.8">Waiting for DatoCMS context or no <code>{{ apiKey }}</code> block found in this field…</em>
       }
@@ -56,7 +32,6 @@ export class ChartPreviewComponent implements OnChanges {
   /** Dato render context, passed in from the page component */
   @Input() ctx: any;
 
-  chartBlock: any = null;
   apiKey = 'chart';
   chartData: any = null;
 
@@ -79,12 +54,6 @@ export class ChartPreviewComponent implements OnChanges {
     // Allow plugin param override for block api key
     const params = this.ctx?.plugin?.attributes?.parameters ?? {};
     this.apiKey = params?.blockApiKey || 'chart';
-
-    // Read current field's value
-    const value = deepGet(this.ctx.formValues, this.ctx.fieldPath);
-
-    // Extract the chart block
-    this.chartBlock = pickChartBlock(value, this.apiKey);
 
     // Make sure height adapts (if not already started by the page)
     this.ctx.startAutoResizer?.();
