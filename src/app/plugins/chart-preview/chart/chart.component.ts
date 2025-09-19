@@ -55,6 +55,7 @@ export class ChartComponent implements OnChanges {
     this.chartType = attrs.chart_type ?? ChartTypes.Bar;
     this.chartJsType = chartJsTypeFrom(this.chartType);
 
+    console.log(attrs, 'attrs')
     const { chartData, palette } = buildChartData(attrs, this.chartType);
     this.chartData = chartData;
 
