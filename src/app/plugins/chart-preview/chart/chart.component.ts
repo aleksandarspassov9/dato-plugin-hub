@@ -56,6 +56,8 @@ export class ChartComponent implements OnChanges {
     this.chartJsType = chartJsTypeFrom(this.chartType);
 
     const { chartData, palette } = buildChartData(attrs, this.chartType);
+    console.log(chartData),
+    console.log(palette),
     this.chartData = {
     labels: ['Q1', 'Q2', 'Q3', 'Q4'],
     datasets: [
