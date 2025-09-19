@@ -55,13 +55,11 @@ export class ChartComponent implements OnChanges {
     this.chartType = attrs.chart_type ?? ChartTypes.Bar;
     this.chartJsType = chartJsTypeFrom(this.chartType);
 
-    console.log(attrs, 'attrs')
     const { chartData, palette } = buildChartData(attrs, this.chartType);
     this.chartData = chartData;
 
     const aspectRatio = Number(attrs.aspect_ratio) || 2;
     this.options = buildChartOptions(this.chartType, aspectRatio, palette);
-    console.log(this.chartData)
 
     this.cd.markForCheck();
   }
