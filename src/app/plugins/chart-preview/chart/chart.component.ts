@@ -60,7 +60,7 @@ export class ChartComponent implements OnChanges {
 
     const aspectRatio = Number(attrs.aspect_ratio) || 2;
     this.options = buildChartOptions(this.chartType, aspectRatio, palette);
-    console.log(this.options)
+    console.log(this.chartData)
 
     this.cd.markForCheck();
   }
