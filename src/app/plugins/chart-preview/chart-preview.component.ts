@@ -46,9 +46,7 @@ export class ChartPreviewComponent implements OnChanges {
         title: chartPreviewData.title,
         chart_type: chartPreviewData.chart_type,
         labels: chartPreviewData.labels,
-        data: {
-          attributes: chartPreviewData.data,
-        },
+        data: chartPreviewData.data,
         aspect_ratio: chartPreviewData.aspect_ratio
       }
     }

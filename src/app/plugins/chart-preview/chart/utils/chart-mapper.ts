@@ -15,8 +15,8 @@ export function buildChartData(attrs: ChartInputAttributes, type: ChartTypes) {
   console.log(raw, 'raw')
 
   const datasets = raw.map((ds, i) => {
-    const label = ds?.attributes?.label ?? `Series ${i + 1}`;
-    const values = (ds?.attributes?.values ?? '')
+    const label = ds.label ?? `Series ${i + 1}`;
+    const values = (ds.values ?? '')
       .toString()
       .split(',')
       .map(s => s.trim().toLowerCase() === 'null' ? '0' : s.trim())
