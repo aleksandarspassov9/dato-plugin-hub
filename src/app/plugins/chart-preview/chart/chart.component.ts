@@ -37,7 +37,7 @@ export class ChartComponent implements OnChanges {
   @Input() preview = false;
 
   title = '';
-  chartType: ChartTypes | undefined;
+  chartType: any | undefined;
   chartJsType = 'bar';
   chartData: any;
   options: any;
