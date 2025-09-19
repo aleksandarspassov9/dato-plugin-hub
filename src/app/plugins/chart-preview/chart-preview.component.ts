@@ -23,6 +23,7 @@ export class ChartPreviewComponent implements OnChanges {
   chartData: any = null;
 
   ngOnChanges(changes: SimpleChanges): void {
+    console.log(changes)
     if (!this.ctx) return;
 
     const chartPreviewDataIndex = this.ctx.formValues?.components.findIndex(c => Object.hasOwn(c, 'chart_preview'))
