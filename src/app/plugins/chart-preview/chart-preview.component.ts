@@ -1,5 +1,6 @@
 import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { ButtonModule } from 'primeng/button';
 
 // helpers
 function deepGet(obj: any, path: string | string[]) {
@@ -32,11 +33,12 @@ function pickChartBlock(value: any, blockApiKey = 'chart') {
 @Component({
     selector: 'dato-chart-preview',
     standalone: true,
-    imports: [CommonModule],
+    imports: [CommonModule, ButtonModule],
     template: `
     <div style="padding:16px; font:inherit;">
+      <p-button label="It works!" icon="pi pi-check"></p-button>
       <h3 style="margin:0 0 8px;">Chart block preview</h3>
-    
+
       @if (chartBlock) {
         <p style="opacity:.8; margin:0 0 8px;">Received <code>{{ apiKey }}</code> block:</p>
         <pre style="padding:12px; background:#f6f6f6; border-radius:8px; overflow:auto;">
@@ -45,7 +47,7 @@ function pickChartBlock(value: any, blockApiKey = 'chart') {
       } @else {
         <em style="opacity:.8">Waiting for DatoCMS context or no <code>{{ apiKey }}</code> block found in this field…</em>
       }
-    
+
     </div>
     `
 })
