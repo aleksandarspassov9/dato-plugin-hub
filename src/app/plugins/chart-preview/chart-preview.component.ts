@@ -16,8 +16,8 @@ function deepGet(obj: any, path: string | string[]) {
     imports: [CommonModule, ButtonModule, ChartComponent],
     template: `
     <div style="padding:16px; font:inherit;">
-      @if (chartData.attributes.data.length > 0) {
-        <h3 style="margin:0 0 8px;">Chart block preview will be available once you start adding datasets.</h3>
+      @if (chartData.attributes.data.length === 0) {
+        <h3 style="margin:0 0 8px;">The chart preview will appear once you add a dataset.</h3>
       } @else {
         <gfp-chart-component [data]="chartData"></gfp-chart-component>
       }
