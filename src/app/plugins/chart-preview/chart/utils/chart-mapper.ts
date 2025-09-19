@@ -12,6 +12,8 @@ export function buildChartData(attrs: ChartInputAttributes, type: ChartTypes) {
 
   const raw = Array.isArray(attrs.data) ? attrs.data : [];
 
+  console.log(raw, 'raw')
+
   const datasets = raw.map((ds, i) => {
     const label = ds?.attributes?.label ?? `Series ${i + 1}`;
     const values = (ds?.attributes?.values ?? '')
@@ -42,7 +44,6 @@ export function buildChartData(attrs: ChartInputAttributes, type: ChartTypes) {
       base.borderColor = i % 2 === 0 ? palette.barLineA : palette.barLineB
     }
 
-    console.log(base,'base')
     return base;
   });
 
