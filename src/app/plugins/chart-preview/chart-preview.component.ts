@@ -22,23 +22,35 @@ export class ChartPreviewComponent implements OnChanges {
 
   chartData: any = null;
 
+  /** holds the timeout ID so we can cancel the previous call */
+  private debounceTimer: any;
+
   ngOnChanges(changes: SimpleChanges): void {
-    console.log(changes)
-    if (!this.ctx) return;
+    // cancel any pending run
+    clearTimeout(this.debounceTimer);
 
-    const chartPreviewDataIndex = this.ctx.formValues?.components.findIndex(c => Object.hasOwn(c, 'chart_preview'))
-    const chartPreviewData = this.ctx.formValues?.components[chartPreviewDataIndex]
+    // schedule the update after 300 ms of no further changes
+    this.debounceTimer = setTimeout(() => {
+      if (!this.ctx) return;
 
-    this.chartData = {
-      attributes: {
-        title: chartPreviewData.title,
-        chart_type: chartPreviewData.chart_type,
-        labels: chartPreviewData.labels,
-        data: chartPreviewData.data,
-        aspect_ratio: chartPreviewData.aspect_ratio
-      }
-    }
+      const chartPreviewDataIndex = this.ctx.formValues?.components.findIndex(
+        c => Object.hasOwn(c, 'chart_preview')
+      );
+      const chartPreviewData =
+        this.ctx.formValues?.components[chartPreviewDataIndex];
 
-    this.ctx.startAutoResizer?.();
+      this.chartData = {
+        attributes: {
+          title: chartPreviewData.title,
+          chart_type: chartPreviewData.chart_type,
+          labels: chartPreviewData.labels,
+          data: chartPreviewData.data,
+          aspect_ratio: chartPreviewData.aspect_ratio,
+        },
+      };
+
+      // adjust the container height if needed
+      this.ctx.startAutoResizer?.();
+    }, 300); // ← adjust delay to taste
   }
 }
