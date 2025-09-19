@@ -28,8 +28,6 @@ export function buildChartData(attrs: ChartInputAttributes, type: ChartTypes) {
         ? labels.map((_, idx) => palette.series[idx % palette.series.length])
         : (i % 2 === 0 ? palette.barLineA : palette.barLineB);
 
-      console.log(backgroundColor,'backgroundColor')
-
     const base: any = {
       label,
       data: values,
@@ -44,6 +42,7 @@ export function buildChartData(attrs: ChartInputAttributes, type: ChartTypes) {
       base.borderColor = i % 2 === 0 ? palette.barLineA : palette.barLineB
     }
 
+    console.log(base,'base')
     return base;
   });
 
