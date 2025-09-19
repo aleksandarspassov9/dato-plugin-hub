@@ -1,6 +1,7 @@
 import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ButtonModule } from 'primeng/button';
+import { ChartComponent } from './chart/chart.component';
 
 // helpers
 function deepGet(obj: any, path: string | string[]) {
@@ -33,10 +34,10 @@ function pickChartBlock(value: any, blockApiKey = 'chart') {
 @Component({
     selector: 'dato-chart-preview',
     standalone: true,
-    imports: [CommonModule, ButtonModule],
+    imports: [CommonModule, ButtonModule, ChartComponent],
     template: `
     <div style="padding:16px; font:inherit;">
-      <p-button label="It works!" icon="pi pi-check"></p-button>
+      <gfp-chart-component [data]="chartData"></gfp-chart-component>
       <h3 style="margin:0 0 8px;">Chart block preview</h3>
 
       @if (chartBlock) {
@@ -57,19 +58,23 @@ export class ChartPreviewComponent implements OnChanges {
 
   chartBlock: any = null;
   apiKey = 'chart';
+  chartData: any = null;
 
   ngOnChanges(changes: SimpleChanges): void {
     if (!this.ctx) return;
 
-    // const chartPreviewData = this.ctx.formValues?.components.map(c => {
-    //   if (Object.hasOwn(c, 'chart_preview')) {
-    //     return c
-    //   }
-    // })
-
     const chartPreviewDataIndex = this.ctx.formValues?.components.findIndex(c => Object.hasOwn(c, 'chart_preview'))
     const chartPreviewData = this.ctx.formValues?.components[chartPreviewDataIndex]
-    console.log(console.log(chartPreviewData))
+
+    this.chartData = {
+      attributes: {
+        title: chartPreviewData.title,
+        chart_type: chartPreviewData.chart_type,
+        labels: chartPreviewData.labels,
+        data: chartPreviewData.data,
+        aspect_ratio: chartPreviewData.aspect_ratio
+      }
+    }
 
     // Allow plugin param override for block api key
     const params = this.ctx?.plugin?.attributes?.parameters ?? {};
