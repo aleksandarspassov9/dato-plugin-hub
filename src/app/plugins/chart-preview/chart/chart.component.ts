@@ -53,7 +53,6 @@ export class ChartComponent implements OnChanges {
     const attrs = this._data.attributes;
     this.title = attrs.title ?? '';
     this.chartType = attrs.chart_type ?? ChartTypes.Bar;
-      console.log(chartJsTypeFrom(this.chartType), 'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww')
     this.chartJsType = chartJsTypeFrom(this.chartType);
 
     const { chartData, palette } = buildChartData(attrs, this.chartType);
@@ -61,6 +60,7 @@ export class ChartComponent implements OnChanges {
 
     const aspectRatio = Number(attrs.aspect_ratio) || 2;
     this.options = buildChartOptions(this.chartType, aspectRatio, palette);
+    console.log(this.options)
 
     this.cd.markForCheck();
   }
