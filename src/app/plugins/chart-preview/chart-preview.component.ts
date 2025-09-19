@@ -17,7 +17,9 @@ function deepGet(obj: any, path: string | string[]) {
     template: `
     <div style="padding:16px; font:inherit;">
 
-      <h3 style="margin:0 0 8px;">Chart block preview</h3>
+      @if (chartData.attributes.data.length > 0) {
+        <h3 style="margin:0 0 8px;">Chart block preview</h3>
+      }
 
       @if (chartData) {
         <gfp-chart-component [data]="chartData"></gfp-chart-component>
