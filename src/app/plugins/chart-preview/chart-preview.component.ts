@@ -16,17 +16,11 @@ function deepGet(obj: any, path: string | string[]) {
     imports: [CommonModule, ButtonModule, ChartComponent],
     template: `
     <div style="padding:16px; font:inherit;">
-
       @if (chartData.attributes.data.length > 0) {
-        <h3 style="margin:0 0 8px;">Chart block preview</h3>
-      }
-
-      @if (chartData) {
-        <gfp-chart-component [data]="chartData"></gfp-chart-component>
+        <h3 style="margin:0 0 8px;">Chart block preview will be available once you start adding datasets.</h3>
       } @else {
-        <em style="opacity:.8">Waiting for DatoCMS context or no <code>{{ apiKey }}</code> block found in this field…</em>
+        <gfp-chart-component [data]="chartData"></gfp-chart-component>
       }
-
     </div>
     `
 })
