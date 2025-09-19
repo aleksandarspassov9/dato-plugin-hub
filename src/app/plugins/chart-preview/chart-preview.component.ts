@@ -3,13 +3,6 @@ import { CommonModule } from '@angular/common';
 import { ButtonModule } from 'primeng/button';
 import { ChartComponent } from './chart/chart.component';
 
-// helpers
-function deepGet(obj: any, path: string | string[]) {
-  if (!obj || !path) return undefined;
-  const parts = Array.isArray(path) ? path : String(path).split('.');
-  return parts.reduce((acc, key) => (acc == null ? acc : acc[key]), obj);
-}
-
 @Component({
     selector: 'dato-chart-preview',
     standalone: true,
@@ -25,33 +18,35 @@ function deepGet(obj: any, path: string | string[]) {
     `
 })
 export class ChartPreviewComponent implements OnChanges {
-  /** Dato render context, passed in from the page component */
   @Input() ctx: any;
 
-  apiKey = 'chart';
   chartData: any = null;
+
+  private debounceTimer: any;
 
   ngOnChanges(changes: SimpleChanges): void {
     if (!this.ctx) return;
 
-    const chartPreviewDataIndex = this.ctx.formValues?.components.findIndex(c => Object.hasOwn(c, 'chart_preview'))
-    const chartPreviewData = this.ctx.formValues?.components[chartPreviewDataIndex]
+    clearTimeout(this.debounceTimer);
 
-    this.chartData = {
-      attributes: {
-        title: chartPreviewData.title,
-        chart_type: chartPreviewData.chart_type,
-        labels: chartPreviewData.labels,
-        data: chartPreviewData.data,
-        aspect_ratio: chartPreviewData.aspect_ratio
-      }
-    }
+    this.debounceTimer = setTimeout(() => {
+      const chartPreviewDataIndex = this.ctx.formValues?.components.findIndex(
+        c => Object.hasOwn(c, 'chart_preview')
+      );
+      const chartPreviewData = this.ctx.formValues?.components[chartPreviewDataIndex];
 
-    // Allow plugin param override for block api key
-    const params = this.ctx?.plugin?.attributes?.parameters ?? {};
-    this.apiKey = params?.blockApiKey || 'chart';
+      this.chartData = {
+        attributes: {
+          title: chartPreviewData.title,
+          chart_type: chartPreviewData.chart_type,
+          labels: chartPreviewData.labels,
+          data: chartPreviewData.data,
+          aspect_ratio: chartPreviewData.aspect_ratio,
+        },
+      };
 
-    // Make sure height adapts (if not already started by the page)
-    this.ctx.startAutoResizer?.();
+      this.ctx.startAutoResizer?.();
+    }, 300);
   }
+
 }
