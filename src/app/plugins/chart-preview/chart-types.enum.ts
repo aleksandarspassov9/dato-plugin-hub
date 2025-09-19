@@ -8,6 +8,8 @@ export enum ChartTypes {
 }
 
 export interface ChartDatasetInput {
+  label: string;
+  values: string;
   attributes?: {
     label?: string;
     values?: string;
