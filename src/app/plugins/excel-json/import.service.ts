@@ -249,7 +249,6 @@ export class ImportService {
   }
 
   // -------------------- (optional) legacy shim --------------------
-  // Keeps old component code compiling; does NOT detect brand-new File/Blob before upload.
   getSiblingFileFromBlock(ctx: RenderFieldExtensionCtx, siblingApiKey: string): UploadLike {
     const hit = this.resolveCurrentBlockContainer(ctx);
     if (!hit) return null;
@@ -282,45 +281,55 @@ export class ImportService {
     return null;
   }
 
-  // -------------------- DATE-SAFE AoA builder (only convert true date cells) --------------------
-  // mm,dd,yyyy (no leading zeros)
+  // -------------------- DATE-SAFE AoA builder (convert only true date cells) --------------------
+  // Format as mm,dd,yyyy (no leading zeros)
   private formatMDY(d: Date): string {
     return `${d.getUTCMonth() + 1},${d.getUTCDate()},${d.getUTCFullYear()}`;
   }
-
+  // Basic sanity for calendar years to avoid converting plain numbers (e.g., 1909)
+  private yearIsPlausible(y: number): boolean {
+    return Number.isFinite(y) && y >= 1900 && y <= 2100;
+  }
   // Detect if an Excel number format represents a date/time.
   private isDateFormat(fmt: string | undefined | null): boolean {
     if (!fmt) return false;
     let s = String(fmt);
-    s = s.replace(/\[[^\]]*\]/g, '');  // [h], [mm]
+    s = s.replace(/\[[^\]]*\]/g, '');  // [h], [mm], etc.
     s = s.replace(/"[^"]*"/g, '');     // "literal"
     s = s.replace(/\\./g, '');         // escaped chars
     return /[ymd]/i.test(s);
   }
-
-  // Is this worksheet cell a date (by type or format)?
+  // Is this worksheet cell tagged like a date by Excel?
   private isDateCell(cell: any): boolean {
     if (!cell) return false;
-    if (cell.t === 'd') return true; // Date object
-    if (cell.t === 'n' && this.isDateFormat(cell.z)) return true; // number + date format
+    if (cell.t === 'd') return true; // explicit date
+    if (cell.t === 'n' && this.isDateFormat(cell.z)) return true; // numeric + date format
     return false;
   }
-
-  // Parse Excel numeric date to JS Date (handles time fraction, 1900/1904 systems)
+  // Try SheetJS SSF parse and validate year
+  private tryParseWithSSF(n: number, date1904: boolean): Date | null {
+    const SSF: any = (XLSX as any).SSF;
+    if (!SSF?.parse_date_code || typeof n !== 'number') return null;
+    const p = SSF.parse_date_code(n, { date1904 });
+    if (!p || !this.yearIsPlausible(p.y)) return null;
+    return new Date(Date.UTC(p.y, (p.m || 1) - 1, p.d || 1, p.H || 0, p.M || 0, p.S || 0));
+  }
+  // Conservative fallback for Excel numeric date → JS Date
   private parseExcelNumberDate(n: number, date1904: boolean): Date | null {
     if (!Number.isFinite(n)) return null;
     const base = date1904 ? 24107 : 25569; // days to Unix epoch
     const days = Math.trunc(n);
-    const fracMs = (n - days) * 86400000;
+    const fracMs = (n - days) * 86400000;  // time-of-day
     const ms = (days - base) * 86400000 + fracMs;
     const d = new Date(ms);
-    return isNaN(d.getTime()) ? null : d;
+    if (!this.yearIsPlausible(d.getUTCFullYear())) return null;
+    return d;
   }
 
   /**
-   * Build AoA by iterating cells so we can use cell types and formats.
-   * Only cells that Excel marks as dates are formatted as "mm,dd,yyyy".
-   * Everything else (including numeric IDs, quantities) is left unchanged.
+   * Build AoA by iterating real cells so we can rely on cell types and number formats.
+   * Only cells Excel marks as dates (by type/format) are converted to "mm,dd,yyyy".
+   * All other values — including plain numbers like `1909` — remain unchanged.
    *
    * Pass { date1904 } from the workbook props for correct epoch.
    */
@@ -344,26 +353,11 @@ export class ImportService {
         if (this.isDateCell(cell)) {
           if (cell.t === 'd') {
             const d = new Date(cell.v);
-            row.push(isNaN(d.getTime()) ? (cell.w ?? '') : this.formatMDY(d));
+            row.push(this.yearIsPlausible(d.getUTCFullYear()) ? this.formatMDY(d) : (cell.w ?? cell.v ?? ''));
           } else if (cell.t === 'n') {
-            // Prefer SSF parse if available
-            const SSF: any = (XLSX as any).SSF;
-            let formatted: string | null = null;
-
-            if (SSF?.parse_date_code && typeof cell.v === 'number') {
-              const parsed = SSF.parse_date_code(cell.v, { date1904 });
-              if (parsed && parsed.y && parsed.m && parsed.d) {
-                const d = new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d, parsed.H || 0, parsed.M || 0, parsed.S || 0));
-                formatted = this.formatMDY(d);
-              }
-            }
-
-            if (!formatted && typeof cell.v === 'number') {
-              const d = this.parseExcelNumberDate(cell.v, date1904);
-              formatted = d ? this.formatMDY(d) : null;
-            }
-
-            row.push(formatted ?? (cell.w ?? cell.v ?? ''));
+            let d: Date | null = this.tryParseWithSSF(cell.v, date1904);
+            if (!d) d = this.parseExcelNumberDate(cell.v, date1904);
+            row.push(d ? this.formatMDY(d) : (cell.w ?? cell.v ?? ''));
           } else {
             row.push(cell.w ?? cell.v ?? '');
           }
