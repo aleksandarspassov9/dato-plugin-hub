@@ -263,45 +263,77 @@ export class ImportService {
     return null;
   }
 
+  // --- helpers: date formatting in UTC to avoid TZ/DST shifts ---
   private formatMDY(d: Date): string {
-    return `${d.getMonth() + 1}.${d.getDate()}.${d.getFullYear()}`;
+    return `${d.getUTCMonth() + 1},${d.getUTCDate()},${d.getUTCFullYear()}`; // mm,dd,yyyy
   }
-
-  private excelSerialToDate(n: number): Date | null {
+  private excelSerialToDateUTC(n: number): Date | null {
     if (!Number.isFinite(n)) return null;
-    const ms = (n - 25569) * 86400000;
+    // 25569 days from 1899-12-30 (Excel) to 1970-01-01 (Unix)
+    const days = Math.trunc(n);
+    const fracMs = (n - days) * 86400000;  // time-of-day
+    const ms = (days - 25569) * 86400000 + fracMs;
     const d = new Date(ms);
     return isNaN(d.getTime()) ? null : d;
   }
 
-  private normalizeCellToMDY(cell: any): any {
-    if (cell == null || cell === '') return cell;
+  // Heuristic: does a HEADER look like a date column?
+  private headerLooksLikeDate(header: unknown): boolean {
+    const h = String(header ?? '').toLowerCase();
+    // add more synonyms if your content editors use them
+    return /(date|datum|fecha|дата|data|fecha|fechas|fecha_inicio|fecha_fin)/i.test(h);
+  }
 
-    if (cell instanceof Date) return this.formatMDY(cell);
-    if (typeof cell === 'number') {
-      const d = this.excelSerialToDate(cell);
-      return d ? this.formatMDY(d) : cell;
-    }
-    if (typeof cell === 'string') {
-      const s = cell.trim();
-      const maybe = /[A-Za-z]{3,}|[0-9]{1,4}[\/,\-\s][0-9]{1,2}[\/,\-\s][0-9]{2,4}/.test(s);
-      if (maybe) {
-        const d = new Date(s);
-        if (!isNaN(d.getTime())) return this.formatMDY(d);
-      }
-    }
-    return cell;
+  // Heuristic: does a STRING cell look like a date literal?
+  private stringLooksLikeDateLiteral(s: string): boolean {
+    // month names OR typical numeric date separators
+    return /[A-Za-z]{3,}/.test(s) || /\d{1,4}[\/,\-.\s]\d{1,2}[\/,\-.\s]\d{2,4}/.test(s);
   }
 
   aoaFromWorksheet(ws: XLSX.WorkSheet): any[][] {
-    const aoaRaw = XLSX.utils.sheet_to_json(ws, {
+    // Read raw values so we control formatting ourselves
+    const aoa = XLSX.utils.sheet_to_json(ws, {
       header: 1,
       defval: '',
-      raw: true,
+      raw: true
     }) as any[][];
 
-    return aoaRaw.map(row => row.map(cell => this.normalizeCellToMDY(cell)));
+    if (!aoa.length) return aoa;
+
+    const header = aoa[0] ?? [];
+    const body = aoa.slice(1);
+
+    const processed = body.map((row) => {
+      const out = [...row];
+      for (let c = 0; c < out.length; c++) {
+        const hdrIsDate = this.headerLooksLikeDate(header[c]);
+        const v = out[c];
+
+        // Only touch if header suggests a date
+        if (hdrIsDate) {
+          if (v instanceof Date) {
+            out[c] = this.formatMDY(v);
+          } else if (typeof v === 'number') {
+            // Excel serial -> Date
+            const d = this.excelSerialToDateUTC(v);
+            if (d) out[c] = this.formatMDY(d);
+          } else if (typeof v === 'string') {
+            const s = v.trim();
+            if (s && this.stringLooksLikeDateLiteral(s)) {
+              const d = new Date(s);
+              if (!isNaN(d.getTime())) out[c] = this.formatMDY(d);
+            }
+          }
+        }
+        // else: leave as-is (numbers stay numbers, no formatting)
+      }
+      return out;
+    });
+
+    // Return header + processed body (no trimming, no column drops)
+    return [header, ...processed];
   }
+
 
   slugHeader(raw: unknown, fallback: string) {
     let s = this.toStringValue(raw).trim();
