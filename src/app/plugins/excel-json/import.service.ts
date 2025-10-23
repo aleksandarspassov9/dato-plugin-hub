@@ -16,9 +16,15 @@ export class ImportService {
   // -------------------- small utils --------------------
   toStringValue(v: unknown): string {
     if (v === null || v === undefined) return '';
-    if (v instanceof Date) return v.toISOString();     // "2025-11-17T00:00:00.000Z"
+    if (v instanceof Date) return this.formatDate(v);
     if (typeof v === 'number' && Number.isNaN(v)) return '';
     return String(v);
+  }
+  private formatDate(d: Date): string {
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const year = d.getUTCFullYear();
+    return `${day}-${month}-${year}`;
   }
   splitPath(path: string) { return path.split('.').filter(Boolean); }
   getAtPath(root: any, parts: string[]) { return parts.reduce((acc, k) => (acc ? acc[k] : undefined), root); }
