@@ -1,3 +1,4 @@
+// import.service.ts
 import { Injectable } from '@angular/core';
 import * as XLSX from 'xlsx';
 import { buildClient, Client as DatoClient } from '@datocms/cma-client-browser';
@@ -12,6 +13,7 @@ function isFileOrBlob(v: any): v is File | Blob {
 
 @Injectable({ providedIn: 'root' })
 export class ImportService {
+  // -------------------- primitives --------------------
   toStringValue(v: unknown): string {
     if (v === null || v === undefined) return '';
     if (typeof v === 'number' && Number.isNaN(v)) return '';
@@ -31,7 +33,7 @@ export class ImportService {
     const root = (ctx as any).formValues;
     if (!root) return null;
     const parts = this.splitPath(ctx.fieldPath);
-    if (ctx.locale && parts[parts.length - 1] === ctx.locale) parts.pop();
+    if (ctx.locale && parts[parts.length - 1] === ctx.locale) parts.pop(); // trim locale suffix
     parts.pop(); // drop current field key
     const container = this.getAtPath(root, parts);
     if (!container || typeof container !== 'object') return null;
@@ -53,6 +55,7 @@ export class ImportService {
     return base.join('.');
   }
 
+  // -------------------- upload-like detection --------------------
   normalizeUploadLike(raw: any): UploadLike {
     if (!raw) return null;
     const v = Array.isArray(raw) ? raw[0] : raw;
@@ -104,6 +107,7 @@ export class ImportService {
     return null;
   }
 
+  // -------------------- CMA client helpers --------------------
   private buildClientSmart(ctx: RenderFieldExtensionCtx | undefined, apiToken: string, withEnv: boolean): DatoClient {
     const env =
       (ctx && (ctx.plugin?.attributes?.parameters as any)?.environment) ||
@@ -158,6 +162,12 @@ export class ImportService {
     throw new Error(`Upload ${uploadId} not reachable/ready. Last error: ${lastErr?.message || lastErr}`);
   }
 
+  // -------------------- public API --------------------
+  /**
+   * Ensures the sibling field resolves to an UploadLike:
+   * - If it already contains an upload/direct url → returns it
+   * - If it contains a File/Blob → uploads via CMA, writes {upload_id} back into the field, returns it
+   */
   async ensureUploadFromSibling(
     ctx: RenderFieldExtensionCtx,
     siblingApiKey: string,
@@ -190,16 +200,19 @@ export class ImportService {
       return ensured;
     };
 
+    // by id
     if (sibDef?.id && Object.prototype.hasOwnProperty.call(container, String(sibDef.id))) {
       const raw = extract(container[String(sibDef.id)]);
       const ensured = await tryEnsure(raw);
       if (ensured) return ensured;
     }
+    // by apiKey
     if (Object.prototype.hasOwnProperty.call(container, siblingApiKey)) {
       const raw = extract(container[siblingApiKey]);
       const ensured = await tryEnsure(raw);
       if (ensured) return ensured;
     }
+    // fallback
     for (const k of Object.keys(container)) {
       const defById = (ctx.fields as any)[k] || allDefs.find((f: any) => String(f.id) === String(k));
       const keyApi = defById ? (f => (f.apiKey ?? f.attributes?.api_key))(defById) : k;
@@ -212,6 +225,10 @@ export class ImportService {
     return null;
   }
 
+  /**
+   * Resolve upload metadata to a PUBLIC URL suitable for fetch/XLSX.
+   * Retries briefly and falls back to a global client if env-scoped lookup says NOT_FOUND.
+   */
   async fetchUploadMeta(
     fileFieldValue: UploadLike,
     cmaToken: string,
@@ -231,6 +248,8 @@ export class ImportService {
     return null;
   }
 
+  // -------------------- (optional) legacy shim --------------------
+  // Keeps old component code compiling; does NOT detect brand-new File/Blob before upload.
   getSiblingFileFromBlock(ctx: RenderFieldExtensionCtx, siblingApiKey: string): UploadLike {
     const hit = this.resolveCurrentBlockContainer(ctx);
     if (!hit) return null;
@@ -263,77 +282,123 @@ export class ImportService {
     return null;
   }
 
-  // --- helpers: date formatting in UTC to avoid TZ/DST shifts ---
+  // -------------------- DATE-SAFE AoA builder (only convert true date cells) --------------------
+  // mm,dd,yyyy (no leading zeros)
   private formatMDY(d: Date): string {
-    return `${d.getUTCMonth() + 1},${d.getUTCDate()},${d.getUTCFullYear()}`; // mm,dd,yyyy
+    return `${d.getUTCMonth() + 1},${d.getUTCDate()},${d.getUTCFullYear()}`;
   }
-  private excelSerialToDateUTC(n: number): Date | null {
+
+  // Detect if an Excel number format represents a date/time.
+  private isDateFormat(fmt: string | undefined | null): boolean {
+    if (!fmt) return false;
+    let s = String(fmt);
+    s = s.replace(/\[[^\]]*\]/g, '');  // [h], [mm]
+    s = s.replace(/"[^"]*"/g, '');     // "literal"
+    s = s.replace(/\\./g, '');         // escaped chars
+    return /[ymd]/i.test(s);
+  }
+
+  // Is this worksheet cell a date (by type or format)?
+  private isDateCell(cell: any): boolean {
+    if (!cell) return false;
+    if (cell.t === 'd') return true; // Date object
+    if (cell.t === 'n' && this.isDateFormat(cell.z)) return true; // number + date format
+    return false;
+  }
+
+  // Parse Excel numeric date to JS Date (handles time fraction, 1900/1904 systems)
+  private parseExcelNumberDate(n: number, date1904: boolean): Date | null {
     if (!Number.isFinite(n)) return null;
-    // 25569 days from 1899-12-30 (Excel) to 1970-01-01 (Unix)
+    const base = date1904 ? 24107 : 25569; // days to Unix epoch
     const days = Math.trunc(n);
-    const fracMs = (n - days) * 86400000;  // time-of-day
-    const ms = (days - 25569) * 86400000 + fracMs;
+    const fracMs = (n - days) * 86400000;
+    const ms = (days - base) * 86400000 + fracMs;
     const d = new Date(ms);
     return isNaN(d.getTime()) ? null : d;
   }
 
-  // Heuristic: does a HEADER look like a date column?
-  private headerLooksLikeDate(header: unknown): boolean {
-    const h = String(header ?? '').toLowerCase();
-    // add more synonyms if your content editors use them
-    return /(date|datum|fecha|дата|data|fecha|fechas|fecha_inicio|fecha_fin)/i.test(h);
+  /**
+   * Build AoA by iterating cells so we can use cell types and formats.
+   * Only cells that Excel marks as dates are formatted as "mm,dd,yyyy".
+   * Everything else (including numeric IDs, quantities) is left unchanged.
+   *
+   * Pass { date1904 } from the workbook props for correct epoch.
+   */
+  aoaFromWorksheet(
+    ws: XLSX.WorkSheet,
+    opts?: { date1904?: boolean }
+  ): any[][] {
+    const date1904 = !!opts?.date1904;
+    const ref = ws['!ref'] || 'A1';
+    const range = XLSX.utils.decode_range(ref);
+
+    const out: any[][] = [];
+    for (let r = range.s.r; r <= range.e.r; r++) {
+      const row: any[] = [];
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        const cell: any = (ws as any)[addr];
+
+        if (!cell) { row.push(''); continue; }
+
+        if (this.isDateCell(cell)) {
+          if (cell.t === 'd') {
+            const d = new Date(cell.v);
+            row.push(isNaN(d.getTime()) ? (cell.w ?? '') : this.formatMDY(d));
+          } else if (cell.t === 'n') {
+            // Prefer SSF parse if available
+            const SSF: any = (XLSX as any).SSF;
+            let formatted: string | null = null;
+
+            if (SSF?.parse_date_code && typeof cell.v === 'number') {
+              const parsed = SSF.parse_date_code(cell.v, { date1904 });
+              if (parsed && parsed.y && parsed.m && parsed.d) {
+                const d = new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d, parsed.H || 0, parsed.M || 0, parsed.S || 0));
+                formatted = this.formatMDY(d);
+              }
+            }
+
+            if (!formatted && typeof cell.v === 'number') {
+              const d = this.parseExcelNumberDate(cell.v, date1904);
+              formatted = d ? this.formatMDY(d) : null;
+            }
+
+            row.push(formatted ?? (cell.w ?? cell.v ?? ''));
+          } else {
+            row.push(cell.w ?? cell.v ?? '');
+          }
+        } else {
+          // Non-date: prefer displayed text if present; otherwise raw value
+          row.push(cell.w ?? cell.v ?? '');
+        }
+      }
+      out.push(row);
+    }
+    return out;
   }
 
-  // Heuristic: does a STRING cell look like a date literal?
-  private stringLooksLikeDateLiteral(s: string): boolean {
-    // month names OR typical numeric date separators
-    return /[A-Za-z]{3,}/.test(s) || /\d{1,4}[\/,\-.\s]\d{1,2}[\/,\-.\s]\d{2,4}/.test(s);
-  }
-
-  aoaFromWorksheet(ws: XLSX.WorkSheet): any[][] {
-    // Read raw values so we control formatting ourselves
-    const aoa = XLSX.utils.sheet_to_json(ws, {
-      header: 1,
-      defval: '',
-      raw: true
-    }) as any[][];
-
-    if (!aoa.length) return aoa;
+  // -------------------- AoA -> rows/columns --------------------
+  normalizeAoA(aoa: any[][]) {
+    if (!aoa.length) return { rows: [] as TableRow[], columns: [] as string[] };
 
     const header = aoa[0] ?? [];
     const body = aoa.slice(1);
 
-    const processed = body.map((row) => {
-      const out = [...row];
-      for (let c = 0; c < out.length; c++) {
-        const hdrIsDate = this.headerLooksLikeDate(header[c]);
-        const v = out[c];
+    let columns = header.map((h, i) => this.slugHeader(h, `column_${i + 1}`));
+    const maxCols = Math.max(columns.length, ...body.map((r) => r.length), 1);
+    while (columns.length < maxCols) columns.push(`column_${columns.length + 1}`);
+    columns = this.makeUnique(columns);
 
-        // Only touch if header suggests a date
-        if (hdrIsDate) {
-          if (v instanceof Date) {
-            out[c] = this.formatMDY(v);
-          } else if (typeof v === 'number') {
-            // Excel serial -> Date
-            const d = this.excelSerialToDateUTC(v);
-            if (d) out[c] = this.formatMDY(d);
-          } else if (typeof v === 'string') {
-            const s = v.trim();
-            if (s && this.stringLooksLikeDateLiteral(s)) {
-              const d = new Date(s);
-              if (!isNaN(d.getTime())) out[c] = this.formatMDY(d);
-            }
-          }
-        }
-        // else: leave as-is (numbers stay numbers, no formatting)
+    const rows: TableRow[] = body.map((r) => {
+      const obj: Record<string, string> = {};
+      for (let i = 0; i < columns.length; i++) {
+        obj[columns[i]] = this.toStringValue(r[i]);
       }
-      return out;
+      return obj;
     });
 
-    // Return header + processed body (no trimming, no column drops)
-    return [header, ...processed];
+    return { rows, columns };
   }
-
 
   slugHeader(raw: unknown, fallback: string) {
     let s = this.toStringValue(raw).trim();
@@ -352,45 +417,5 @@ export class ImportService {
       seen.set(base, count);
       return count === 1 ? base : `${base}_${count}`;
     });
-  }
-
-  normalizeAoA(aoa: any[][]) {
-    if (!aoa.length) return { rows: [] as TableRow[], columns: [] as string[] };
-
-    const headerRaw = aoa[0] ?? [];
-    const body = aoa.slice(1);
-    const header = [...headerRaw];
-    const maxCols = Math.max(header.length, ...body.map((r) => r.length), 1);
-
-    const usage = new Array<number>(maxCols).fill(0);
-    for (const r of body) {
-      for (let i = 0; i < r.length; i++) {
-        if (String(r[i] ?? '').trim() !== '') usage[i]++;
-      }
-    }
-
-    let lastKeep = maxCols - 1;
-    while (lastKeep >= 0) {
-      const hasHeader = String(header[lastKeep] ?? '').trim() !== '';
-      const hasData = usage[lastKeep] > 0;
-      if (hasHeader || hasData) break;
-      lastKeep--;
-    }
-    const keepCols = Math.max(0, lastKeep + 1);
-
-    const slicedHeader = header.slice(0, keepCols);
-    const slicedBody = body.map((r) => r.slice(0, keepCols));
-
-    let columns = slicedHeader.map((h, i) => this.slugHeader(h, `column_${i + 1}`));
-    while (columns.length < keepCols) columns.push(`column_${columns.length + 1}`);
-    columns = this.makeUnique(columns);
-
-    const rows: TableRow[] = slicedBody.map((r) => {
-      const obj: Record<string, string> = {};
-      for (let i = 0; i < keepCols; i++) obj[columns[i]] = this.toStringValue(r[i]);
-      return obj;
-    });
-
-    return { rows, columns };
   }
 }
