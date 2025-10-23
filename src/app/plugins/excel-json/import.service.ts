@@ -20,6 +20,7 @@ export class ImportService {
     if (typeof v === 'number' && Number.isNaN(v)) return '';
     return String(v);
   }
+
   private formatDate(d: Date): string {
     const day = String(d.getUTCDate()).padStart(2, '0');
     const month = String(d.getUTCMonth() + 1).padStart(2, '0');
@@ -305,19 +306,57 @@ export class ImportService {
     }) as any[][];
   }
 
-  // -------------------- AoA -> rows/columns --------------------
+  // -------------------- AoA -> rows/columns (with empty col/row pruning) --------------------
+  private isCellEmpty(v: unknown): boolean {
+    if (v === null || v === undefined) return true;
+    if (typeof v === 'string' && v.trim() === '') return true;
+    return false;
+  }
+
   normalizeAoA(aoa: any[][]) {
     if (!aoa.length) return { rows: [] as TableRow[], columns: [] as string[] };
 
     const header = aoa[0] ?? [];
     const body = aoa.slice(1);
 
-    let columns = header.map((h, i) => this.slugHeader(h, `column_${i + 1}`));
-    const maxCols = Math.max(columns.length, ...body.map((r) => r.length), 1);
-    while (columns.length < maxCols) columns.push(`column_${columns.length + 1}`);
-    columns = this.makeUnique(columns);
+    // Determine overall width
+    const maxCols = Math.max(header.length, ...body.map(r => r.length), 1);
 
-    const rows: TableRow[] = body.map((r) => {
+    // --- 1) Decide which columns to keep (drop columns where header AND all body cells are empty)
+    const keepColIdx: number[] = [];
+    for (let c = 0; c < maxCols; c++) {
+      let nonEmpty = !this.isCellEmpty(header[c]);
+      if (!nonEmpty) {
+        for (let r = 0; r < body.length && !nonEmpty; r++) {
+          if (!this.isCellEmpty(body[r][c])) nonEmpty = true;
+        }
+      }
+      if (nonEmpty) keepColIdx.push(c);
+    }
+
+    if (keepColIdx.length === 0) {
+      return { rows: [] as TableRow[], columns: [] as string[] };
+    }
+
+    // --- 2) Build columns from kept indices
+    let columns = keepColIdx.map((c, i) => this.slugHeader(header[c], `column_${i + 1}`));
+    // Ensure unique names (preserve current behavior)
+    const seen = new Map<string, number>();
+    columns = columns.map((name) => {
+      const base = name;
+      const count = (seen.get(base) ?? 0) + 1;
+      seen.set(base, count);
+      return count === 1 ? base : `${base}_${count}`;
+    });
+
+    // --- 3) Prune body rows to kept columns
+    const prunedBody = body.map(r => keepColIdx.map(c => r[c]));
+
+    // --- 4) Drop rows that are entirely empty AFTER column pruning
+    const nonEmptyBody = prunedBody.filter(row => row.some(cell => !this.isCellEmpty(cell)));
+
+    // --- 5) Build row objects
+    const rows: TableRow[] = nonEmptyBody.map((r) => {
       const obj: Record<string, string> = {};
       for (let i = 0; i < columns.length; i++) {
         obj[columns[i]] = this.toStringValue(r[i]);
