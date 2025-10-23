@@ -15,8 +15,8 @@ function isFileOrBlob(v: any): v is File | Blob {
 export class ImportService {
   // -------------------- small utils --------------------
   toStringValue(v: unknown): string {
-    console.log(v, 'v')
     if (v === null || v === undefined) return '';
+    if (v instanceof Date) return v.toISOString();     // "2025-11-17T00:00:00.000Z"
     if (typeof v === 'number' && Number.isNaN(v)) return '';
     return String(v);
   }
