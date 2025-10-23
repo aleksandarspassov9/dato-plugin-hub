@@ -1,3 +1,4 @@
+// import.service.ts
 import { Injectable } from '@angular/core';
 import * as XLSX from 'xlsx';
 import { buildClient, Client as DatoClient } from '@datocms/cma-client-browser';
@@ -12,7 +13,7 @@ function isFileOrBlob(v: any): v is File | Blob {
 
 @Injectable({ providedIn: 'root' })
 export class ImportService {
-  // -------------------- basic utils --------------------
+  // -------------------- primitives --------------------
   toStringValue(v: unknown): string {
     if (v === null || v === undefined) return '';
     if (typeof v === 'number' && Number.isNaN(v)) return '';
@@ -107,40 +108,65 @@ export class ImportService {
   }
 
   // -------------------- CMA client helpers --------------------
-  private buildClientFromCtx(ctx: RenderFieldExtensionCtx, apiToken: string): DatoClient {
+  private buildClientSmart(ctx: RenderFieldExtensionCtx | undefined, apiToken: string, withEnv: boolean): DatoClient {
     const env =
-      (ctx.plugin?.attributes?.parameters as any)?.environment ||
-      (ctx as any)?.environment || // just in case you store it elsewhere
+      (ctx && (ctx.plugin?.attributes?.parameters as any)?.environment) ||
+      (ctx && (ctx as any)?.environment) ||
       undefined;
-    return buildClient({
-      apiToken,
-      environment: env, // keep environment consistent; prevents 404 on find()
-    });
+    return withEnv && env
+      ? buildClient({ apiToken, environment: env })
+      : buildClient({ apiToken });
   }
 
-  private async waitForUploadReady(client: DatoClient, uploadId: string, maxMs = 6000): Promise<any> {
+  private isNotFound(err: any): boolean {
+    const code = err?.code || err?.data?.code || err?.response?.data?.code;
+    const status = err?.status || err?.response?.status;
+    return code === 'NOT_FOUND' || status === 404;
+  }
+
+  private async findUploadRobust(
+    ctx: RenderFieldExtensionCtx | undefined,
+    apiToken: string,
+    uploadId: string,
+    { maxMs = 7000, stepMs = 300 } = {}
+  ): Promise<any> {
+    const clientEnv = this.buildClientSmart(ctx, apiToken, true);
+    const clientGlobal = this.buildClientSmart(ctx, apiToken, false);
+
     const start = Date.now();
+    let triedGlobal = false;
     let lastErr: any = null;
 
     while (Date.now() - start < maxMs) {
       try {
-        const up: any = await client.uploads.find(String(uploadId));
-        // Some projects expose processing state; otherwise just check url presence.
-        if (up?.url) return up;
+        if (!triedGlobal) {
+          const up = await clientEnv.uploads.find(String(uploadId));
+          if (up?.url) return up;
+        } else {
+          const up = await clientGlobal.uploads.find(String(uploadId));
+          if (up?.url) return up;
+        }
       } catch (e) {
         lastErr = e;
-        // swallow and retry; could be eventual consistency
+        if (!triedGlobal && this.isNotFound(e)) triedGlobal = true; // env mismatch → try global
       }
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, stepMs));
     }
-    if (lastErr) throw lastErr;
-    throw new Error('Upload not ready yet (timed out waiting for public URL).');
+
+    if (!triedGlobal) {
+      try {
+        const up = await clientGlobal.uploads.find(String(uploadId));
+        if (up?.url) return up;
+      } catch (e) { lastErr = e; }
+    }
+    throw new Error(`Upload ${uploadId} not reachable/ready. Last error: ${lastErr?.message || lastErr}`);
   }
 
-  // -------------------- ensure upload from sibling --------------------
+  // -------------------- public API --------------------
   /**
-   * - If sibling is already an upload or direct URL -> return it
-   * - If sibling contains a File/Blob -> upload via CMA, write back {upload_id} into the block, return it
+   * Ensures the sibling field resolves to an UploadLike:
+   * - If it already contains an upload/direct url → returns it
+   * - If it contains a File/Blob → uploads via CMA, writes {upload_id} back into the field, returns it
    */
   async ensureUploadFromSibling(
     ctx: RenderFieldExtensionCtx,
@@ -164,20 +190,17 @@ export class ImportService {
 
       const file = this.findFirstFileOrBlobDeep(raw);
       if (!file) return null;
-
       if (!cmaToken) throw new Error('Missing CMA token: cannot upload local file.');
-      const client = this.buildClientFromCtx(ctx, cmaToken);
 
+      const client = this.buildClientSmart(ctx, cmaToken, true);
       const created = await client.uploads.createFromFileOrBlob({ fileOrBlob: file });
       const ensured: UploadLike = { upload_id: String(created.id) };
 
-      // Persist the new upload id into the source field so validate payload is stable
       if (sourcePath) await ctx.setFieldValue(sourcePath, { upload_id: ensured.upload_id });
-
       return ensured;
     };
 
-    // by id key
+    // by id
     if (sibDef?.id && Object.prototype.hasOwnProperty.call(container, String(sibDef.id))) {
       const raw = extract(container[String(sibDef.id)]);
       const ensured = await tryEnsure(raw);
@@ -189,21 +212,23 @@ export class ImportService {
       const ensured = await tryEnsure(raw);
       if (ensured) return ensured;
     }
-    // fallback scan
-    let fallback: UploadLike = null;
+    // fallback
     for (const k of Object.keys(container)) {
       const defById = (ctx.fields as any)[k] || allDefs.find((f: any) => String(f.id) === String(k));
-      const keyApi = defById ? (defById.apiKey ?? defById.attributes?.api_key) : k;
+      const keyApi = defById ? (f => (f.apiKey ?? f.attributes?.api_key))(defById) : k;
       const raw = extract(container[k]);
       const ensured = await tryEnsure(raw);
       if (!ensured) continue;
       if (keyApi === siblingApiKey) return ensured;
-      if (!fallback) fallback = ensured;
+      return ensured;
     }
-    return fallback;
+    return null;
   }
 
-  // -------------------- public fetch meta (ALWAYS returns public asset URL) --------------------
+  /**
+   * Resolve upload metadata to a PUBLIC URL suitable for fetch/XLSX.
+   * Retries briefly and falls back to a global client if env-scoped lookup says NOT_FOUND.
+   */
   async fetchUploadMeta(
     fileFieldValue: UploadLike,
     cmaToken: string,
@@ -211,19 +236,48 @@ export class ImportService {
   ): Promise<{ url: string; mime: string | null; filename: string | null } | null> {
     if (fileFieldValue?.upload_id) {
       if (!cmaToken) throw new Error('Missing CMA token: cannot resolve upload metadata.');
-      const client = ctx ? this.buildClientFromCtx(ctx, cmaToken) : buildClient({ apiToken: cmaToken });
-
-      // Wait until the upload exposes a public URL (handles eventual consistency)
-      const upload: any = await this.waitForUploadReady(client, String(fileFieldValue.upload_id));
-
-      // IMPORTANT: use the public URL for downloading (datocms-assets.com), not site-api/uploads/:id
-      return { url: upload?.url || null, mime: upload?.mime_type ?? null, filename: upload?.filename ?? null };
+      const up = await this.findUploadRobust(ctx, cmaToken, String(fileFieldValue.upload_id));
+      return { url: up?.url || null, mime: up?.mime_type ?? null, filename: up?.filename ?? null };
     }
     if (fileFieldValue?.__direct_url) {
       const url: string = fileFieldValue.__direct_url;
       let filename: string | null = null;
       try { const u = new URL(url); filename = decodeURIComponent(u.pathname.split('/').pop() || ''); } catch {}
       return { url, mime: null, filename };
+    }
+    return null;
+  }
+
+  // -------------------- (optional) legacy shim --------------------
+  // Keeps old component code compiling; does NOT detect brand-new File/Blob before upload.
+  getSiblingFileFromBlock(ctx: RenderFieldExtensionCtx, siblingApiKey: string): UploadLike {
+    const hit = this.resolveCurrentBlockContainer(ctx);
+    if (!hit) return null;
+    const { container } = hit;
+
+    const allDefs = Object.values(ctx.fields) as any[];
+    const sibDef = allDefs.find((f: any) => (f.apiKey ?? f.attributes?.api_key) === siblingApiKey);
+    const isLocalized = Boolean(sibDef?.localized ?? sibDef?.attributes?.localized);
+
+    const pick = (v: any) => isLocalized ? this.pickAnyLocaleValue(v, ctx.locale) : v;
+
+    if (sibDef?.id && Object.prototype.hasOwnProperty.call(container, String(sibDef.id))) {
+      const raw = pick(container[String(sibDef.id)]);
+      const norm = this.normalizeUploadLike(raw) || this.findFirstUploadDeep(raw);
+      if (norm) return norm;
+    }
+    if (Object.prototype.hasOwnProperty.call(container, siblingApiKey)) {
+      const raw = pick(container[siblingApiKey]);
+      const norm = this.normalizeUploadLike(raw) || this.findFirstUploadDeep(raw);
+      if (norm) return norm;
+    }
+    for (const k of Object.keys(container)) {
+      const defById = (ctx.fields as any)[k] || allDefs.find((f: any) => String(f.id) === String(k));
+      const keyApi = defById ? (f => (f.apiKey ?? f.attributes?.api_key))(defById) : k;
+      const raw = pick(container[k]);
+      const norm = this.normalizeUploadLike(raw) || this.findFirstUploadDeep(raw);
+      if (!norm) continue;
+      if (keyApi === siblingApiKey) return norm;
     }
     return null;
   }
