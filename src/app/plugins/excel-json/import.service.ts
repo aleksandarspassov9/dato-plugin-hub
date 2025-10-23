@@ -15,9 +15,9 @@ function isFileOrBlob(v: any): v is File | Blob {
 export class ImportService {
   // -------------------- small utils --------------------
   toStringValue(v: unknown): string {
+    console.log(v, 'v')
     if (v === null || v === undefined) return '';
     if (typeof v === 'number' && Number.isNaN(v)) return '';
-    console.log(v, 'v')
     return String(v);
   }
   splitPath(path: string) { return path.split('.').filter(Boolean); }
