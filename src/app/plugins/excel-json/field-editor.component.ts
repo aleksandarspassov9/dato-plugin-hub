@@ -96,6 +96,7 @@ export class FieldEditorComponent {
     try {
 const token = (this.ctx.plugin.attributes.parameters as any)?.cmaToken || '';
 const uploadLike = await this.svc.ensureUploadFromSibling(this.ctx, this.sourceApiKey, token);
+console.log(uploadLike, 'uploadLike')
       const sig = this.fileSignature(uploadLike);        // string | null
       const bkey = this.blockKey();                   // block+locale key
       if (!bkey) return;
