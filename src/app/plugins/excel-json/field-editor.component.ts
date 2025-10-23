@@ -89,20 +89,17 @@ export class FieldEditorComponent {
 
       const token = (this.ctx.plugin.attributes.parameters as any)?.cmaToken || '';
 
-      // IMPORTANT:
-      // Use the *async* resolver that uploads local File/Blob if needed,
-      // and also writes { upload_id } back into the source field.
+      // Use the async resolver; it uploads local File/Blob if needed and writes { upload_id } back.
       const uploadLike = await this.svc.getSiblingUploadFromBlock(this.ctx, this.sourceApiKey, token);
 
-      // Compute a signature that also covers local File/Blob (pre-upload)
-      // NOTE: getSiblingUploadFromBlock already normalized to UploadLike when possible
-      const sig = this.svc.buildSignature(uploadLike || this.svc.getSiblingFileFromBlock(this.ctx, this.sourceApiKey));
+      // Build a signature directly from what we resolved.
+      const sig = this.svc.buildSignature(uploadLike);
 
       const firstDone = FIRST_SCAN_DONE.get(bkey) === true;
       const prevSig = LAST_SIG_BY_BLOCK.get(bkey) ?? null;
       const normalizedSig = sig ?? '__NULL__';
 
-      // 1) First scan: just record the baseline, never import
+      // 1) First scan: record baseline, do not import
       if (!firstDone) {
         LAST_SIG_BY_BLOCK.set(bkey, normalizedSig);
         FIRST_SCAN_DONE.set(bkey, true);
@@ -115,18 +112,19 @@ export class FieldEditorComponent {
       // 3) Change detected
       LAST_SIG_BY_BLOCK.set(bkey, normalizedSig);
 
-      // 3a) File removed → optional clear
+      // 3a) File removed → clear
       if (!uploadLike) {
         await this.handleRemoval();
         return;
       }
 
-      // 3b) File added/changed → import now that we have an UploadLike
+      // 3b) File added/changed → import
       await this.importFromUpload(uploadLike);
     } catch {
       // swallow polling errors
     }
   }
+
 
   // Clear the JSON (and optional sibling metas) when file is removed
   private async handleRemoval() {
