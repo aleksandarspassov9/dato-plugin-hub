@@ -170,17 +170,18 @@ export class FieldEditorComponent {
 
       const ct = (res.headers.get('content-type') || meta.mime || '').toLowerCase();
       let aoa: any[][];
+
       if (ct.includes('csv')) {
-        const text = await res.text();
-        const wb = XLSX.read(text, { type: 'string' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        aoa = this.svc.aoaFromWorksheet(ws);
-      } else {
-        const buf = await res.arrayBuffer();
-        const wb = XLSX.read(buf, { type: 'array' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        aoa = this.svc.aoaFromWorksheet(ws);
-      }
+      const text = await res.text();
+      const wb = XLSX.read(text, { type: 'string' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      aoa = this.svc.aoaFromWorksheet(ws);
+    } else {
+      const buf = await res.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      aoa = this.svc.aoaFromWorksheet(ws);
+    }
 
       const norm = this.svc.normalizeAoA(aoa);
       const payloadObj = (PAYLOAD_SHAPE === 'matrix')

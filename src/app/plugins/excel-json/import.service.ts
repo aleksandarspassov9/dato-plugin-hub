@@ -282,10 +282,24 @@ export class ImportService {
     return null;
   }
 
-  // -------------------- xlsx helpers --------------------
   aoaFromWorksheet(ws: XLSX.WorkSheet): any[][] {
-    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
-    return aoa.filter(row => row.some(cell => String(cell ?? '').trim() !== ''));
+    const aoa = XLSX.utils.sheet_to_json(ws, {
+      header: 1,
+      defval: '',
+      raw: false,
+      dateNF: 'dd-mm-yyyy'
+    }) as any[][];
+
+    const trimmed = aoa
+      .map((row) => this.trimTrailingEmpties(row))
+      .filter(row => row.some(cell => String(cell ?? '').trim() !== ''));
+    return trimmed;
+  }
+
+  private trimTrailingEmpties(row: any[]): any[] {
+    let end = row.length;
+    while (end > 0 && String(row[end - 1] ?? '').trim() === '') end--;
+    return row.slice(0, end);
   }
 
   slugHeader(raw: unknown, fallback: string) {
@@ -310,19 +324,48 @@ export class ImportService {
   normalizeAoA(aoa: any[][]) {
     if (!aoa.length) return { rows: [] as TableRow[], columns: [] as string[] };
 
-    const header = aoa[0] ?? [];
+    // Work on already-trimmed rows (aoaFromWorksheet guarantees this)
+    const headerRaw = aoa[0] ?? [];
     const body = aoa.slice(1);
 
-    let columns = header.map((h, i) => this.slugHeader(h, `column_${i + 1}`));
-    const maxCols = Math.max(columns.length, ...body.map((r) => r.length), 1);
-    while (columns.length < maxCols) columns.push(`column_${columns.length + 1}`);
+    // Start from trimmed header
+    const header = [...headerRaw];
+
+    // Determine the widest row length we should consider
+    const maxCols = Math.max(header.length, ...body.map((r) => r.length), 1);
+
+    // Count data usage per column to drop trailing empty columns later
+    const usage = new Array<number>(maxCols).fill(0);
+    for (const r of body) {
+      for (let i = 0; i < r.length; i++) {
+        if (String(r[i] ?? '').trim() !== '') usage[i]++;
+      }
+    }
+
+    // Find last column index we actually want to keep:
+    // - keep if header has something non-empty, OR there is at least one data cell in that column
+    let lastKeep = maxCols - 1;
+    while (lastKeep >= 0) {
+      const hasHeader = String(header[lastKeep] ?? '').trim() !== '';
+      const hasData = usage[lastKeep] > 0;
+      if (hasHeader || hasData) break;
+      lastKeep--;
+    }
+    const keepCols = Math.max(0, lastKeep + 1);
+
+    // Slice header/body to the useful width
+    const slicedHeader = header.slice(0, keepCols);
+    const slicedBody = body.map((r) => r.slice(0, keepCols));
+
+    // Slugify headers, fill blanks, and make unique
+    let columns = slicedHeader.map((h, i) => this.slugHeader(h, `column_${i + 1}`));
+    while (columns.length < keepCols) columns.push(`column_${columns.length + 1}`);
     columns = this.makeUnique(columns);
 
-    const rows: TableRow[] = body.map((r) => {
-      const padded = [...r];
-      while (padded.length < maxCols) padded.push('');
+    // Build row objects
+    const rows: TableRow[] = slicedBody.map((r) => {
       const obj: Record<string, string> = {};
-      columns.forEach((c, i) => { obj[c] = this.toStringValue(padded[i]); });
+      for (let i = 0; i < keepCols; i++) obj[columns[i]] = this.toStringValue(r[i]);
       return obj;
     });
 
