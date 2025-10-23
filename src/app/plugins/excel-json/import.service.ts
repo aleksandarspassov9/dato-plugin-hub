@@ -282,19 +282,49 @@ export class ImportService {
     return null;
   }
 
-  aoaFromWorksheet(ws: XLSX.WorkSheet): any[][] {
-    const aoa = XLSX.utils.sheet_to_json(ws, {
-      header: 1,
-      defval: '',
-      raw: false,
-      dateNF: 'mm,dd,yyyy'
-    }) as any[][];
+  // In ImportService
 
-    const trimmed = aoa
-      .map((row) => this.trimTrailingEmpties(row))
-      .filter(row => row.some(cell => String(cell ?? '').trim() !== ''));
-    return trimmed;
+// 1) helpers (keep these if you don't already have them)
+private formatMDY(d: Date): string {
+  return `${d.getMonth() + 1},${d.getDate()},${d.getFullYear()}`;
+}
+private excelSerialToDate(n: number): Date | null {
+  if (!Number.isFinite(n)) return null;
+  const ms = (n - 25569) * 86400000; // Excel epoch -> JS epoch
+  const d = new Date(ms);
+  return isNaN(d.getTime()) ? null : d;
+}
+private normalizeCellToMDY(cell: any): any {
+  if (cell == null || cell === '') return cell;
+
+  if (cell instanceof Date) return this.formatMDY(cell);
+  if (typeof cell === 'number') {
+    const d = this.excelSerialToDate(cell);
+    return d ? this.formatMDY(d) : cell;
   }
+  if (typeof cell === 'string') {
+    const s = cell.trim();
+    const maybe = /[A-Za-z]{3,}|[0-9]{1,4}[\/,\-\s][0-9]{1,2}[\/,\-\s][0-9]{2,4}/.test(s);
+    if (maybe) {
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) return this.formatMDY(d);
+    }
+  }
+  return cell;
+}
+
+// 2) minimal AoA reader: no trimming, no filtering — only date normalization
+aoaFromWorksheet(ws: XLSX.WorkSheet): any[][] {
+  const aoaRaw = XLSX.utils.sheet_to_json(ws, {
+    header: 1,
+    defval: '',
+    raw: true,
+  }) as any[][];
+
+  // ONLY normalize potential dates; keep all cells/columns/rows as-is
+  return aoaRaw.map(row => row.map(cell => this.normalizeCellToMDY(cell)));
+}
+
 
   private trimTrailingEmpties(row: any[]): any[] {
     let end = row.length;
