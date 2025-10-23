@@ -6,7 +6,7 @@ export function buildChartData(attrs: ChartInputAttributes, type: ChartTypes) {
 
   const labels = (attrs.labels ?? '')
     .toString()
-    .split(',')
+    .split(';')
     .map(s => s.trim())
     .filter(Boolean);
 
@@ -16,7 +16,7 @@ export function buildChartData(attrs: ChartInputAttributes, type: ChartTypes) {
     const label = ds.label ?? `Series ${i + 1}`;
     const values = (ds.values ?? '')
       .toString()
-      .split(',')
+      .split(';')
       .map(s => s.trim().toLowerCase() === 'null' ? '0' : s.trim())
       .map(s => {
         const n = Number(s);
