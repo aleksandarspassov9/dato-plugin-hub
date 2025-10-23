@@ -1,4 +1,3 @@
-// import.service.ts
 import { Injectable } from '@angular/core';
 import * as XLSX from 'xlsx';
 import { buildClient, Client as DatoClient } from '@datocms/cma-client-browser';
@@ -13,7 +12,6 @@ function isFileOrBlob(v: any): v is File | Blob {
 
 @Injectable({ providedIn: 'root' })
 export class ImportService {
-  // -------------------- primitives --------------------
   toStringValue(v: unknown): string {
     if (v === null || v === undefined) return '';
     if (typeof v === 'number' && Number.isNaN(v)) return '';
@@ -33,7 +31,7 @@ export class ImportService {
     const root = (ctx as any).formValues;
     if (!root) return null;
     const parts = this.splitPath(ctx.fieldPath);
-    if (ctx.locale && parts[parts.length - 1] === ctx.locale) parts.pop(); // trim locale suffix
+    if (ctx.locale && parts[parts.length - 1] === ctx.locale) parts.pop();
     parts.pop(); // drop current field key
     const container = this.getAtPath(root, parts);
     if (!container || typeof container !== 'object') return null;
@@ -55,7 +53,6 @@ export class ImportService {
     return base.join('.');
   }
 
-  // -------------------- upload-like detection --------------------
   normalizeUploadLike(raw: any): UploadLike {
     if (!raw) return null;
     const v = Array.isArray(raw) ? raw[0] : raw;
@@ -107,7 +104,6 @@ export class ImportService {
     return null;
   }
 
-  // -------------------- CMA client helpers --------------------
   private buildClientSmart(ctx: RenderFieldExtensionCtx | undefined, apiToken: string, withEnv: boolean): DatoClient {
     const env =
       (ctx && (ctx.plugin?.attributes?.parameters as any)?.environment) ||
@@ -162,12 +158,6 @@ export class ImportService {
     throw new Error(`Upload ${uploadId} not reachable/ready. Last error: ${lastErr?.message || lastErr}`);
   }
 
-  // -------------------- public API --------------------
-  /**
-   * Ensures the sibling field resolves to an UploadLike:
-   * - If it already contains an upload/direct url → returns it
-   * - If it contains a File/Blob → uploads via CMA, writes {upload_id} back into the field, returns it
-   */
   async ensureUploadFromSibling(
     ctx: RenderFieldExtensionCtx,
     siblingApiKey: string,
@@ -200,19 +190,16 @@ export class ImportService {
       return ensured;
     };
 
-    // by id
     if (sibDef?.id && Object.prototype.hasOwnProperty.call(container, String(sibDef.id))) {
       const raw = extract(container[String(sibDef.id)]);
       const ensured = await tryEnsure(raw);
       if (ensured) return ensured;
     }
-    // by apiKey
     if (Object.prototype.hasOwnProperty.call(container, siblingApiKey)) {
       const raw = extract(container[siblingApiKey]);
       const ensured = await tryEnsure(raw);
       if (ensured) return ensured;
     }
-    // fallback
     for (const k of Object.keys(container)) {
       const defById = (ctx.fields as any)[k] || allDefs.find((f: any) => String(f.id) === String(k));
       const keyApi = defById ? (f => (f.apiKey ?? f.attributes?.api_key))(defById) : k;
@@ -225,10 +212,6 @@ export class ImportService {
     return null;
   }
 
-  /**
-   * Resolve upload metadata to a PUBLIC URL suitable for fetch/XLSX.
-   * Retries briefly and falls back to a global client if env-scoped lookup says NOT_FOUND.
-   */
   async fetchUploadMeta(
     fileFieldValue: UploadLike,
     cmaToken: string,
@@ -248,8 +231,6 @@ export class ImportService {
     return null;
   }
 
-  // -------------------- (optional) legacy shim --------------------
-  // Keeps old component code compiling; does NOT detect brand-new File/Blob before upload.
   getSiblingFileFromBlock(ctx: RenderFieldExtensionCtx, siblingApiKey: string): UploadLike {
     const hit = this.resolveCurrentBlockContainer(ctx);
     if (!hit) return null;
@@ -282,54 +263,44 @@ export class ImportService {
     return null;
   }
 
-  // In ImportService
-
-// 1) helpers (keep these if you don't already have them)
-private formatMDY(d: Date): string {
-  return `${d.getMonth() + 1},${d.getDate()},${d.getFullYear()}`;
-}
-private excelSerialToDate(n: number): Date | null {
-  if (!Number.isFinite(n)) return null;
-  const ms = (n - 25569) * 86400000; // Excel epoch -> JS epoch
-  const d = new Date(ms);
-  return isNaN(d.getTime()) ? null : d;
-}
-private normalizeCellToMDY(cell: any): any {
-  if (cell == null || cell === '') return cell;
-
-  if (cell instanceof Date) return this.formatMDY(cell);
-  if (typeof cell === 'number') {
-    const d = this.excelSerialToDate(cell);
-    return d ? this.formatMDY(d) : cell;
+  private formatMDY(d: Date): string {
+    return `${d.getMonth() + 1}.${d.getDate()}.${d.getFullYear()}`;
   }
-  if (typeof cell === 'string') {
-    const s = cell.trim();
-    const maybe = /[A-Za-z]{3,}|[0-9]{1,4}[\/,\-\s][0-9]{1,2}[\/,\-\s][0-9]{2,4}/.test(s);
-    if (maybe) {
-      const d = new Date(s);
-      if (!isNaN(d.getTime())) return this.formatMDY(d);
+
+  private excelSerialToDate(n: number): Date | null {
+    if (!Number.isFinite(n)) return null;
+    const ms = (n - 25569) * 86400000;
+    const d = new Date(ms);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  private normalizeCellToMDY(cell: any): any {
+    if (cell == null || cell === '') return cell;
+
+    if (cell instanceof Date) return this.formatMDY(cell);
+    if (typeof cell === 'number') {
+      const d = this.excelSerialToDate(cell);
+      return d ? this.formatMDY(d) : cell;
     }
+    if (typeof cell === 'string') {
+      const s = cell.trim();
+      const maybe = /[A-Za-z]{3,}|[0-9]{1,4}[\/,\-\s][0-9]{1,2}[\/,\-\s][0-9]{2,4}/.test(s);
+      if (maybe) {
+        const d = new Date(s);
+        if (!isNaN(d.getTime())) return this.formatMDY(d);
+      }
+    }
+    return cell;
   }
-  return cell;
-}
 
-// 2) minimal AoA reader: no trimming, no filtering — only date normalization
-aoaFromWorksheet(ws: XLSX.WorkSheet): any[][] {
-  const aoaRaw = XLSX.utils.sheet_to_json(ws, {
-    header: 1,
-    defval: '',
-    raw: true,
-  }) as any[][];
+  aoaFromWorksheet(ws: XLSX.WorkSheet): any[][] {
+    const aoaRaw = XLSX.utils.sheet_to_json(ws, {
+      header: 1,
+      defval: '',
+      raw: true,
+    }) as any[][];
 
-  // ONLY normalize potential dates; keep all cells/columns/rows as-is
-  return aoaRaw.map(row => row.map(cell => this.normalizeCellToMDY(cell)));
-}
-
-
-  private trimTrailingEmpties(row: any[]): any[] {
-    let end = row.length;
-    while (end > 0 && String(row[end - 1] ?? '').trim() === '') end--;
-    return row.slice(0, end);
+    return aoaRaw.map(row => row.map(cell => this.normalizeCellToMDY(cell)));
   }
 
   slugHeader(raw: unknown, fallback: string) {
@@ -354,17 +325,11 @@ aoaFromWorksheet(ws: XLSX.WorkSheet): any[][] {
   normalizeAoA(aoa: any[][]) {
     if (!aoa.length) return { rows: [] as TableRow[], columns: [] as string[] };
 
-    // Work on already-trimmed rows (aoaFromWorksheet guarantees this)
     const headerRaw = aoa[0] ?? [];
     const body = aoa.slice(1);
-
-    // Start from trimmed header
     const header = [...headerRaw];
-
-    // Determine the widest row length we should consider
     const maxCols = Math.max(header.length, ...body.map((r) => r.length), 1);
 
-    // Count data usage per column to drop trailing empty columns later
     const usage = new Array<number>(maxCols).fill(0);
     for (const r of body) {
       for (let i = 0; i < r.length; i++) {
@@ -372,8 +337,6 @@ aoaFromWorksheet(ws: XLSX.WorkSheet): any[][] {
       }
     }
 
-    // Find last column index we actually want to keep:
-    // - keep if header has something non-empty, OR there is at least one data cell in that column
     let lastKeep = maxCols - 1;
     while (lastKeep >= 0) {
       const hasHeader = String(header[lastKeep] ?? '').trim() !== '';
@@ -383,16 +346,13 @@ aoaFromWorksheet(ws: XLSX.WorkSheet): any[][] {
     }
     const keepCols = Math.max(0, lastKeep + 1);
 
-    // Slice header/body to the useful width
     const slicedHeader = header.slice(0, keepCols);
     const slicedBody = body.map((r) => r.slice(0, keepCols));
 
-    // Slugify headers, fill blanks, and make unique
     let columns = slicedHeader.map((h, i) => this.slugHeader(h, `column_${i + 1}`));
     while (columns.length < keepCols) columns.push(`column_${columns.length + 1}`);
     columns = this.makeUnique(columns);
 
-    // Build row objects
     const rows: TableRow[] = slicedBody.map((r) => {
       const obj: Record<string, string> = {};
       for (let i = 0; i < keepCols; i++) obj[columns[i]] = this.toStringValue(r[i]);
