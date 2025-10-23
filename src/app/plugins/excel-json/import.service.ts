@@ -153,6 +153,7 @@ export class ImportService {
     if (fileFieldValue?.upload_id) {
       if (!cmaToken) return null;
       const client = buildClient({ apiToken: cmaToken });
+      console.log(fileFieldValue, 'fileFieldValue')
       const upload: any = await client.uploads.find(String(fileFieldValue.upload_id));
       return { url: upload?.url || null, mime: upload?.mime_type ?? null, filename: upload?.filename ?? null };
     }
