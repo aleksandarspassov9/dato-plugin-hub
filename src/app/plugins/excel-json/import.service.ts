@@ -287,7 +287,7 @@ export class ImportService {
       header: 1,
       defval: '',
       raw: false,
-      dateNF: 'dd-mm-yyyy'
+      dateNF: 'yyyy-mm-dd'
     }) as any[][];
 
     const trimmed = aoa
