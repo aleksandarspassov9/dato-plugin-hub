@@ -94,8 +94,9 @@ export class FieldEditorComponent {
 
   private async tick() {
     try {
-      const fileVal = this.svc.getSiblingFileFromBlock(this.ctx, this.sourceApiKey);
-      const sig = this.fileSignature(fileVal);        // string | null
+const token = (this.ctx.plugin.attributes.parameters as any)?.cmaToken || '';
+const uploadLike = await this.svc.ensureUploadFromSibling(this.ctx, this.sourceApiKey, token);
+      const sig = this.fileSignature(uploadLike);        // string | null
       const bkey = this.blockKey();                   // block+locale key
       if (!bkey) return;
 
@@ -125,7 +126,7 @@ export class FieldEditorComponent {
       }
 
       // 3b) File added/changed → import
-      await this.importFromFile(fileVal, bkey);
+      await this.importFromFile(uploadLike, bkey);
     } catch {
       // swallow polling errors
     }
