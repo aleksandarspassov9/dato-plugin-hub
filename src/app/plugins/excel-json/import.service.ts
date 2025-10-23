@@ -6,8 +6,14 @@ import type { RenderFieldExtensionCtx } from 'datocms-plugin-sdk';
 type TableRow = Record<string, string>;
 type UploadLike = { upload_id?: string; __direct_url?: string } | null;
 
+// Narrow DOM availability for Node typings; in browsers these exist.
+function isFileOrBlob(v: any): v is File | Blob {
+  return typeof v === 'object' && v != null && (v instanceof Blob || (typeof File !== 'undefined' && v instanceof File));
+}
+
 @Injectable({ providedIn: 'root' })
 export class ImportService {
+  // -------------------- small utils --------------------
   toStringValue(v: unknown): string {
     if (v === null || v === undefined) return '';
     if (typeof v === 'number' && Number.isNaN(v)) return '';
@@ -28,13 +34,30 @@ export class ImportService {
     const root = (ctx as any).formValues;
     if (!root) return null;
     const parts = this.splitPath(ctx.fieldPath);
-    if (ctx.locale && parts[parts.length - 1] === ctx.locale) parts.pop();
-    parts.pop();
+    if (ctx.locale && parts[parts.length - 1] === ctx.locale) parts.pop(); // drop locale suffix if present
+    parts.pop(); // drop current field key
     const container = this.getAtPath(root, parts);
     if (!container || typeof container !== 'object') return null;
     return { container, containerPath: parts };
   }
 
+  /** Build a path to a sibling field inside the same block, respecting id/apiKey addressing and locale. */
+  private makeSiblingFieldPath(ctx: RenderFieldExtensionCtx, siblingApiKey: string): string | null {
+    const hit = this.resolveCurrentBlockContainer(ctx);
+    if (!hit) return null;
+    const { containerPath } = hit;
+
+    const allDefs = Object.values(ctx.fields) as any[];
+    const sibDef = allDefs.find((f: any) => (f.apiKey ?? f.attributes?.api_key) === siblingApiKey);
+    const isLocalized = Boolean(sibDef?.localized ?? sibDef?.attributes?.localized);
+    const key = sibDef?.id ? String(sibDef.id) : siblingApiKey;
+
+    const base = [...containerPath, key];
+    if (isLocalized && ctx.locale) base.push(ctx.locale);
+    return base.join('.');
+  }
+
+  // -------------------- upload-like detection --------------------
   normalizeUploadLike(raw: any): UploadLike {
     if (!raw) return null;
     const v = Array.isArray(raw) ? raw[0] : raw;
@@ -59,16 +82,116 @@ export class ImportService {
     }
     if (typeof val === 'object') {
       for (const k of Object.keys(val)) {
-        const n = this.findFirstUploadDeep(val[k]);
+        const n = this.findFirstUploadDeep((val as any)[k]);
         if (n) return n;
       }
     }
     return null;
   }
 
+  /** Find first File/Blob deep in a structure (used when a brand-new file was selected). */
+  findFirstFileOrBlobDeep(val: any): File | Blob | null {
+    if (!val) return null;
+    if (isFileOrBlob(val)) return val;
+
+    if (Array.isArray(val)) {
+      for (const it of val) {
+        const n = this.findFirstFileOrBlobDeep(it);
+        if (n) return n;
+      }
+      return null;
+    }
+    if (typeof val === 'object') {
+      for (const k of Object.keys(val)) {
+        const n = this.findFirstFileOrBlobDeep((val as any)[k]);
+        if (n) return n;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Ensure we have an UploadLike:
+   * - If we already have an upload id/direct url, return it
+   * - If a File/Blob exists, upload to Dato and return { upload_id }
+   * - If we uploaded from a File/Blob, optionally write { upload_id } back into the source field
+   */
+  async ensureUploadFromSibling(
+    ctx: RenderFieldExtensionCtx,
+    siblingApiKey: string,
+    cmaToken: string
+  ): Promise<UploadLike> {
+    const hit = this.resolveCurrentBlockContainer(ctx);
+    if (!hit) return null;
+    const { container } = hit;
+
+    const allDefs = Object.values(ctx.fields) as any[];
+    const sibDef = allDefs.find((f: any) => (f.apiKey ?? f.attributes?.api_key) === siblingApiKey);
+    const isLocalized = Boolean(sibDef?.localized ?? sibDef?.attributes?.localized);
+    const sourcePath = this.makeSiblingFieldPath(ctx, siblingApiKey);
+
+    const extract = (raw: any) => isLocalized ? this.pickAnyLocaleValue(raw, ctx.locale) : raw;
+
+    // 1) Try by id-key
+    if (sibDef?.id && Object.prototype.hasOwnProperty.call(container, String(sibDef.id))) {
+      const raw = extract(container[String(sibDef.id)]);
+      const ensured = await this.ensureUploadLike(raw, cmaToken);
+      // If we uploaded from a local File/Blob, persist the { upload_id } in the block
+      if (ensured?.upload_id && sourcePath && isFileOrBlob(raw)) {
+        await ctx.setFieldValue(sourcePath, { upload_id: ensured.upload_id });
+      }
+      if (ensured) return ensured;
+    }
+
+    // 2) Try by apiKey
+    if (Object.prototype.hasOwnProperty.call(container, siblingApiKey)) {
+      const raw = extract(container[siblingApiKey]);
+      const ensured = await this.ensureUploadLike(raw, cmaToken);
+      if (ensured?.upload_id && sourcePath && isFileOrBlob(raw)) {
+        await ctx.setFieldValue(sourcePath, { upload_id: ensured.upload_id });
+      }
+      if (ensured) return ensured;
+    }
+
+    // 3) Fallback scan
+    let fallback: UploadLike = null;
+    for (const k of Object.keys(container)) {
+      const defById = (ctx.fields as any)[k] || allDefs.find((f: any) => String(f.id) === String(k));
+      const keyApi = defById ? (defById.apiKey ?? defById.attributes?.api_key) : k;
+      const raw = extract(container[k]);
+      const ensured = await this.ensureUploadLike(raw, cmaToken);
+      if (!ensured) continue;
+      if (keyApi === siblingApiKey) return ensured;
+      if (!fallback) fallback = ensured;
+    }
+    return fallback;
+  }
+
+  /** Core: if already an upload, return it; if a File/Blob, upload it first. */
+  async ensureUploadLike(raw: any, cmaToken: string): Promise<UploadLike> {
+    const existing = this.normalizeUploadLike(raw) || this.findFirstUploadDeep(raw);
+    if (existing) return existing;
+
+    const file = this.findFirstFileOrBlobDeep(raw);
+    if (!file) return null;
+    if (!cmaToken) throw new Error('Missing CMA token for uploading file to DatoCMS');
+
+    const client = buildClient({ apiToken: cmaToken });
+    const upload = await client.uploads.createFromFileOrBlob({
+      fileOrBlob: file,
+      // filename: (file as File).name, // optional hint
+    });
+
+    return { upload_id: String(upload.id) };
+  }
+
+  /**
+   * Legacy synchronous getter (kept for compatibility).
+   * NOTE: This will NOT see a brand-new File/Blob before it’s uploaded; prefer ensureUploadFromSibling().
+   */
   getSiblingFileFromBlock(ctx: RenderFieldExtensionCtx, siblingApiKey: string): UploadLike {
     const hit = this.resolveCurrentBlockContainer(ctx);
-    console.log(hit, 'hit')
+    console.log(hit, 'hit');
     if (!hit) return null;
     const { container } = hit;
 
@@ -100,6 +223,7 @@ export class ImportService {
     return fallback;
   }
 
+  // -------------------- xlsx helpers --------------------
   aoaFromWorksheet(ws: XLSX.WorkSheet): any[][] {
     const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
     return aoa.filter(row => row.some(cell => String(cell ?? '').trim() !== ''));
@@ -146,6 +270,7 @@ export class ImportService {
     return { rows, columns };
   }
 
+  // -------------------- DatoCMS upload meta --------------------
   async fetchUploadMeta(
     fileFieldValue: UploadLike,
     cmaToken: string
@@ -153,8 +278,9 @@ export class ImportService {
     if (fileFieldValue?.upload_id) {
       if (!cmaToken) return null;
       const client = buildClient({ apiToken: cmaToken });
-      console.log(fileFieldValue, 'fileFieldValue')
+      console.log(fileFieldValue, 'fileFieldValue');
       const upload: any = await client.uploads.find(String(fileFieldValue.upload_id));
+      // IMPORTANT: use the public asset URL returned by the CMA (datocms-assets.com), not site-api/uploads/:id
       return { url: upload?.url || null, mime: upload?.mime_type ?? null, filename: upload?.filename ?? null };
     }
     if (fileFieldValue?.__direct_url) {
