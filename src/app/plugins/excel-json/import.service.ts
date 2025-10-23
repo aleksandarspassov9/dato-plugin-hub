@@ -331,7 +331,7 @@ export class ImportService {
   slugHeader(raw: unknown, fallback: string) {
     let s = this.toStringValue(raw).trim();
     if (!s) return fallback;
-    s = s.replace(/[^\p{L}\p{N}\s_-]+/gu, '').trim().replace(/\s+/g, '_');
+    s = s.replace(/[^\p{L}\p{N}\s_-]+/gu, '').trim().replace(/\s+/g, ' ');
     s = s.replace(/^_+/, '');
     if (/^\d/.test(s) || !s) return fallback;
     return s;
