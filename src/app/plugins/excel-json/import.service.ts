@@ -13,7 +13,7 @@ function isFileOrBlob(v: any): v is File | Blob {
 
 @Injectable({ providedIn: 'root' })
 export class ImportService {
-  // -------------------- primitives --------------------
+  // -------------------- small utils --------------------
   toStringValue(v: unknown): string {
     if (v === null || v === undefined) return '';
     if (typeof v === 'number' && Number.isNaN(v)) return '';
@@ -33,7 +33,7 @@ export class ImportService {
     const root = (ctx as any).formValues;
     if (!root) return null;
     const parts = this.splitPath(ctx.fieldPath);
-    if (ctx.locale && parts[parts.length - 1] === ctx.locale) parts.pop(); // trim locale suffix
+    if (ctx.locale && parts[parts.length - 1] === ctx.locale) parts.pop(); // drop locale suffix when present
     parts.pop(); // drop current field key
     const container = this.getAtPath(root, parts);
     if (!container || typeof container !== 'object') return null;
@@ -281,94 +281,21 @@ export class ImportService {
     return null;
   }
 
-  // -------------------- DATE-SAFE AoA builder (convert only true date cells) --------------------
-  // Format as mm,dd,yyyy (no leading zeros)
-  private formatMDY(d: Date): string {
-    return `${d.getUTCMonth() + 1},${d.getUTCDate()},${d.getUTCFullYear()}`;
-  }
-  // Basic sanity for calendar years to avoid converting plain numbers (e.g., 1909)
-  private yearIsPlausible(y: number): boolean {
-    return Number.isFinite(y) && y >= 1900 && y <= 2100;
-  }
-  // Detect if an Excel number format represents a date/time.
-  private isDateFormat(fmt: string | undefined | null): boolean {
-    if (!fmt) return false;
-    let s = String(fmt);
-    s = s.replace(/\[[^\]]*\]/g, '');  // [h], [mm], etc.
-    s = s.replace(/"[^"]*"/g, '');     // "literal"
-    s = s.replace(/\\./g, '');         // escaped chars
-    return /[ymd]/i.test(s);
-  }
-  // Is this worksheet cell tagged like a date by Excel?
-  private isDateCell(cell: any): boolean {
-    if (!cell) return false;
-    if (cell.t === 'd') return true; // explicit date
-    if (cell.t === 'n' && this.isDateFormat(cell.z)) return true; // numeric + date format
-    return false;
-  }
-  // Try SheetJS SSF parse and validate year
-  private tryParseWithSSF(n: number, date1904: boolean): Date | null {
-    const SSF: any = (XLSX as any).SSF;
-    if (!SSF?.parse_date_code || typeof n !== 'number') return null;
-    const p = SSF.parse_date_code(n, { date1904 });
-    if (!p || !this.yearIsPlausible(p.y)) return null;
-    return new Date(Date.UTC(p.y, (p.m || 1) - 1, p.d || 1, p.H || 0, p.M || 0, p.S || 0));
-  }
-  // Conservative fallback for Excel numeric date → JS Date
-  private parseExcelNumberDate(n: number, date1904: boolean): Date | null {
-    if (!Number.isFinite(n)) return null;
-    const base = date1904 ? 24107 : 25569; // days to Unix epoch
-    const days = Math.trunc(n);
-    const fracMs = (n - days) * 86400000;  // time-of-day
-    const ms = (days - base) * 86400000 + fracMs;
-    const d = new Date(ms);
-    if (!this.yearIsPlausible(d.getUTCFullYear())) return null;
-    return d;
-  }
-
+  // -------------------- AoA builder (NO date formatting at all) --------------------
   /**
-   * Build AoA by iterating real cells so we can rely on cell types and number formats.
-   * Only cells Excel marks as dates (by type/format) are converted to "mm,dd,yyyy".
-   * All other values — including plain numbers like `1909` — remain unchanged.
-   *
-   * Pass { date1904 } from the workbook props for correct epoch.
+   * Returns a plain array-of-arrays from a worksheet without any date conversion/formatting.
+   * We read RAW values and keep everything as the library gives it:
+   * - Numbers stay numbers (including Excel date serials)
+   * - Strings stay strings (including long date strings)
+   * - Empty cells become ''
    */
-  aoaFromWorksheet(
-    ws: XLSX.WorkSheet,
-    opts?: { date1904?: boolean }
-  ): any[][] {
-    const date1904 = !!opts?.date1904;
-    const ref = ws['!ref'] || 'A1';
-    const range = XLSX.utils.decode_range(ref);
-
-    const out: any[][] = [];
-    for (let r = range.s.r; r <= range.e.r; r++) {
-      const row: any[] = [];
-      for (let c = range.s.c; c <= range.e.c; c++) {
-        const addr = XLSX.utils.encode_cell({ r, c });
-        const cell: any = (ws as any)[addr];
-
-        if (!cell) { row.push(''); continue; }
-
-        if (this.isDateCell(cell)) {
-          if (cell.t === 'd') {
-            const d = new Date(cell.v);
-            row.push(this.yearIsPlausible(d.getUTCFullYear()) ? this.formatMDY(d) : (cell.w ?? cell.v ?? ''));
-          } else if (cell.t === 'n') {
-            let d: Date | null = this.tryParseWithSSF(cell.v, date1904);
-            if (!d) d = this.parseExcelNumberDate(cell.v, date1904);
-            row.push(d ? this.formatMDY(d) : (cell.w ?? cell.v ?? ''));
-          } else {
-            row.push(cell.w ?? cell.v ?? '');
-          }
-        } else {
-          // Non-date: prefer displayed text if present; otherwise raw value
-          row.push(cell.w ?? cell.v ?? '');
-        }
-      }
-      out.push(row);
-    }
-    return out;
+  aoaFromWorksheet(ws: XLSX.WorkSheet): any[][] {
+    return XLSX.utils.sheet_to_json(ws, {
+      header: 1,
+      defval: '',
+      raw: true
+      // no dateNF, no cellDates — deliberately NOT formatting dates
+    }) as any[][];
   }
 
   // -------------------- AoA -> rows/columns --------------------
